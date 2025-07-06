@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
-import { PlusCircle, Edit, Trash2, Users, BarChart, DollarSign, Video, Trophy, LogOut } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Users, BarChart, DollarSign, Video, Trophy, LogOut, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import CreateTombolaModal from '@/components/CreateTombolaModal';
@@ -20,6 +20,7 @@ import {
 } from '@/lib/supabaseServices';
 import { getPublicUrl } from '@/lib/fileUploadService';
 import VideoUpload from '@/components/VideoUpload';
+import ConfirmModal from '@/components/ConfirmModal';
 
 function AdminPage() {
   const [tombolas, setTombolas] = useState([]);
@@ -34,6 +35,8 @@ function AdminPage() {
     totalRevenue: 0,
     activeTombolas: 0
   });
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, tombolaId: null });
+  const [confirmDraw, setConfirmDraw] = useState({ open: false, tombola: null });
 
   const { toast } = useToast();
 
@@ -178,7 +181,6 @@ function AdminPage() {
   const handleDeleteTombola = async (id) => {
     try {
       const { error } = await deleteTombola(id);
-
       if (error) {
         toast({
           title: "Erreur",
@@ -187,10 +189,7 @@ function AdminPage() {
         });
         return;
       }
-
-      // Recharger les données
       await loadData();
-
       toast({
         title: "Supprimé",
         description: "Tombola supprimée avec succès",
@@ -207,11 +206,15 @@ function AdminPage() {
   };
 
   const handleDrawWinners = async (tombola) => {
+    setConfirmDraw({ open: true, tombola });
+  };
+
+  const confirmDrawWinners = async () => {
+    const tombola = confirmDraw.tombola;
+    setConfirmDraw({ open: false, tombola: null });
     try {
-      // Vérifier que la date de tirage est atteinte
       const now = new Date();
       const drawDate = new Date(tombola.draw_date);
-
       if (now < drawDate) {
         toast({
           title: "Tirage impossible",
@@ -220,8 +223,6 @@ function AdminPage() {
         });
         return;
       }
-
-      // Vérifier que la tombola est active
       if (tombola.status !== 'active') {
         toast({
           title: "Tirage impossible",
@@ -230,18 +231,7 @@ function AdminPage() {
         });
         return;
       }
-
-      // Confirmation avant le tirage
-      const confirmed = window.confirm(
-        `Êtes-vous sûr de vouloir effectuer le tirage pour "${tombola.title}" ?\n\n` +
-        `Cette action est irréversible et sélectionnera ${tombola.max_winners} gagnant(s) parmi ${tombola.participants} participant(s).`
-      );
-
-      if (!confirmed) return;
-
-      // Effectuer le tirage
       const { data: winners, error } = await performDraw(tombola.id);
-
       if (error) {
         toast({
           title: "Erreur lors du tirage",
@@ -250,24 +240,16 @@ function AdminPage() {
         });
         return;
       }
-
-      // Recharger les données
       await loadData();
-
-      // Afficher le résultat
       toast({
         title: "🎉 Tirage effectué avec succès !",
         description: `${winners.length} gagnant(s) ont été sélectionné(s) pour "${tombola.title}".`,
         variant: "success"
       });
-
-      // Afficher les détails des gagnants
       const winnersList = winners.map((winner, index) =>
         `${index + 1}. ${winner.participants?.name || 'Anonyme'} - ${winner.prize_amount}`
       ).join('\n');
-
       alert(`🏆 Gagnants de "${tombola.title}":\n\n${winnersList}`);
-
     } catch (error) {
       console.error('Erreur lors du tirage:', error);
       toast({
@@ -386,7 +368,10 @@ function AdminPage() {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => { setEditingTombola(null); setIsCreateModalOpen(true); }} className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold w-full sm:w-auto">
+                <Button
+                  onClick={() => setEditingTombola(null) || setIsCreateModalOpen(true)}
+                  className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold w-full sm:w-auto"
+                >
                   <PlusCircle className="w-5 h-5 mr-2" />
                   Nouvelle Tombola
                 </Button>
@@ -489,7 +474,7 @@ function AdminPage() {
                           </Button>
 
                           <Button
-                            onClick={() => handleDeleteTombola(tombola.id)}
+                            onClick={() => setConfirmDelete({ open: true, tombolaId: tombola.id })}
                             size="sm"
                             className="bg-red-500 hover:bg-red-600 text-white"
                           >
@@ -513,6 +498,31 @@ function AdminPage() {
           }}
           onSubmit={editingTombola ? handleUpdateTombola : handleCreateTombola}
           editingTombola={editingTombola}
+        />
+
+        <ConfirmModal
+          isOpen={confirmDelete.open}
+          onClose={() => setConfirmDelete({ open: false, tombolaId: null })}
+          onConfirm={async () => {
+            await handleDeleteTombola(confirmDelete.tombolaId);
+            setConfirmDelete({ open: false, tombolaId: null });
+          }}
+          title="Confirmer la suppression"
+          message="Êtes-vous sûr de vouloir supprimer cette tombola ? Cette action est irréversible."
+          confirmLabel="Supprimer"
+          confirmColor="bg-red-500 hover:bg-red-600"
+          icon={<Trash2 />}
+        />
+
+        <ConfirmModal
+          isOpen={confirmDraw.open}
+          onClose={() => setConfirmDraw({ open: false, tombola: null })}
+          onConfirm={confirmDrawWinners}
+          title="Confirmer le tirage"
+          message={confirmDraw.tombola ? `Êtes-vous sûr de vouloir effectuer le tirage pour "${confirmDraw.tombola.title}" ?\n\nCette action est irréversible et sélectionnera ${confirmDraw.tombola.max_winners} gagnant(s) parmi ${confirmDraw.tombola.participants} participant(s).` : ''}
+          confirmLabel="Tirer au sort"
+          confirmColor="bg-green-500 hover:bg-green-600"
+          icon={<Gift />}
         />
       </div>
     </>

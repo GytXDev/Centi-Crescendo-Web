@@ -19,6 +19,7 @@ function HomePage() {
   const [winnerVideoUrl, setWinnerVideoUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [contactPhone, setContactPhone] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -55,6 +56,7 @@ function HomePage() {
         console.error('Erreur lors du chargement de la configuration:', configError);
       } else {
         setWinnerVideoUrl(config?.winner_video_url);
+        setContactPhone(config?.contact_phone);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
@@ -273,6 +275,10 @@ function HomePage() {
           </div>
         </section>
 
+        <section className="py-16 px-4 bg-[#0B0B0F]">
+
+        </section>
+
         {winners.length > 0 && (
           <section className="py-16 px-4 bg-black">
             <div className="container mx-auto">
@@ -351,6 +357,37 @@ function HomePage() {
                 </motion.div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* SECTION SUPPORT & CONTACT */}
+        <section className="py-12 px-4 bg-black border-t border-gray-800">
+          <div className="container mx-auto text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="inline-block w-full max-w-xl"
+            >
+              <h2 className="text-3xl font-bold text-yellow-400 mb-4">Support & Contact</h2>
+              <p className="text-lg text-gray-300 mb-4">
+                Besoin d'aide ou d'informations ? Notre support est disponible sur WhatsApp !
+              </p>
+              {contactPhone && (
+                <div className="mb-4">
+                  <span className="font-semibold text-white">Téléphone : </span>
+                  <a href={`tel:${contactPhone}`} className="text-yellow-400 hover:underline">{contactPhone}</a>
+                </div>
+              )}
+              <a
+                href="https://whatsapp.com/channel/0029Vb6804bCXC3IZmra730o"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg transition-all duration-300"
+              >
+                📢 Rejoindre la chaîne WhatsApp
+              </a>
+            </motion.div>
           </div>
         </section>
 

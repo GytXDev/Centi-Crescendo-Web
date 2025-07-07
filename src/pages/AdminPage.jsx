@@ -24,6 +24,7 @@ import {
 import { getPublicUrl } from '@/lib/fileUploadService';
 import VideoUpload from '@/components/VideoUpload';
 import ConfirmModal from '@/components/ConfirmModal';
+import WinnerManagerModal from '@/components/WinnerManagerModal';
 
 function AdminPage() {
   const [tombolas, setTombolas] = useState([]);
@@ -40,6 +41,8 @@ function AdminPage() {
   });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, tombolaId: null });
   const [confirmDraw, setConfirmDraw] = useState({ open: false, tombola: null });
+  const [isWinnerManagerOpen, setIsWinnerManagerOpen] = useState(false);
+  const [selectedTombola, setSelectedTombola] = useState(null);
 
   const { toast } = useToast();
 
@@ -513,6 +516,15 @@ function AdminPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
+
+                          <Button
+                            onClick={() => { setSelectedTombola(tombola); setIsWinnerManagerOpen(true); }}
+                            size="sm"
+                            className="bg-yellow-500 hover:bg-yellow-600 text-black"
+                          >
+                            <Trophy className="w-4 h-4 mr-1" />
+                            Gérer les gagnants
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -571,6 +583,12 @@ function AdminPage() {
           confirmLabel="Tirer au sort"
           confirmColor="bg-green-500 hover:bg-green-600"
           icon={<Gift />}
+        />
+
+        <WinnerManagerModal
+          isOpen={isWinnerManagerOpen}
+          onClose={() => setIsWinnerManagerOpen(false)}
+          tombola={selectedTombola}
         />
       </div>
     </>

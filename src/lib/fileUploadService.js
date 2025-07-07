@@ -144,4 +144,59 @@ export function validateVideoFile(file) {
         isValid: errors.length === 0,
         errors
     };
+}
+
+/**
+ * Upload une photo/image de gagnant vers Supabase Storage
+ */
+export async function uploadWinnerPhoto(file, folder = 'winners') {
+    try {
+        // Vérifier le type de fichier
+        if (!file.type.startsWith('image/')) {
+            throw new Error('Le fichier doit être une image');
+        }
+
+        // Vérifier la taille du fichier (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            throw new Error('Le fichier est trop volumineux. Taille maximum : 5MB');
+        }
+
+        // Générer un nom de fichier unique
+        const timestamp = Date.now();
+        const randomString = Math.random().toString(36).substring(2, 15);
+        const fileExtension = file.name.split('.').pop();
+        const fileName = `${folder}/${timestamp}_${randomString}.${fileExtension}`;
+
+        // Upload du fichier
+        const { data, error } = await supabase.storage
+            .from('app-files')
+            .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (error) {
+            throw error;
+        }
+
+        // Obtenir l'URL publique du fichier
+        const { data: urlData } = supabase.storage
+            .from('app-files')
+            .getPublicUrl(fileName);
+
+        return {
+            success: true,
+            filePath: fileName,
+            publicUrl: urlData.publicUrl,
+            fileName: file.name,
+            fileSize: file.size
+        };
+    } catch (error) {
+        console.error('Erreur lors de l\'upload de la photo:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
 } 

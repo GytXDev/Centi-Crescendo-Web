@@ -184,7 +184,7 @@ export async function getParticipantsByTombola(tombolaId) {
 /**
  * Crée un nouveau participant
  */
-export async function createParticipant(participantData) {
+export async function createParticipant(participantData, paymentStatus = 'confirmed') {
     try {
         const { data, error } = await supabase
             .from('participants')
@@ -193,7 +193,7 @@ export async function createParticipant(participantData) {
                 phone: participantData.phone,
                 tombola_id: participantData.tombolaId,
                 ticket_number: generateTicketNumber(),
-                payment_status: 'pending',
+                payment_status: paymentStatus,
                 airtel_money_number: participantData.airtelMoneyNumber
             }])
             .select()
@@ -278,6 +278,36 @@ export async function createWinner(winnerData) {
         return { data, error: null };
     } catch (error) {
         console.error('Erreur lors de la création du gagnant:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère les gagnants d'une tombola spécifique
+ */
+export async function getWinnersByTombola(tombolaId) {
+    try {
+        const { data, error } = await supabase
+            .from('winners')
+            .select(`
+                *,
+                participants (
+                  name,
+                  phone,
+                  ticket_number
+                ),
+                tombolas (
+                  title,
+                  jackpot
+                )
+            `)
+            .eq('tombola_id', tombolaId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des gagnants de la tombola:', error);
         return { data: null, error };
     }
 }
@@ -1034,6 +1064,25 @@ export async function updateCommissionPaymentStatus(paymentId, status) {
         return { data, error: null };
     } catch (error) {
         console.error('Erreur lors de la mise à jour du statut de paiement:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Met à jour l'URL de la photo d'un gagnant
+ */
+export async function updateWinnerPhotoUrl(winnerId, photoUrl) {
+    try {
+        const { data, error } = await supabase
+            .from('winners')
+            .update({ photo_url: photoUrl })
+            .eq('id', winnerId)
+            .select()
+            .single();
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la photo du gagnant:", error);
         return { data: null, error };
     }
 } 

@@ -10,25 +10,25 @@ function WinnerCard({ winner, showTombola = false }) {
     >
       <div className="flex items-center gap-4 mb-4">
         <div className="relative">
-          <img 
+          <img
             className="w-16 h-16 rounded-full object-cover border-2 border-gray-700"
             alt={`Photo de ${winner.name}`}
-           src="https://images.unsplash.com/photo-1673381572188-9c26638c73fd" />
+            src={winner.photo_url || 'https://images.unsplash.com/photo-1673381572188-9c26638c73fd'} />
           <div className="absolute -bottom-1 -right-1 bg-yellow-400 p-1 rounded-full">
             <Trophy className="w-4 h-4 text-black" />
           </div>
         </div>
-        
+
         <div className="flex-1">
           <h3 className="text-xl font-bold text-white">
             {winner.name}
           </h3>
           <p className="text-green-400 font-medium text-lg">
-            A gagné {winner.prize}
+            A gagné {new Intl.NumberFormat('fr-FR').format(winner.prize)} CFA
           </p>
         </div>
       </div>
-      
+
       <div className="space-y-2 text-sm border-t border-gray-800 pt-4 mt-4">
         <div className="flex items-center gap-2 text-gray-400">
           <Ticket className="w-4 h-4 text-yellow-400" />

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS participants (
     airtel_money_number VARCHAR(50) NOT NULL,
     tombola_id BIGINT NOT NULL REFERENCES tombolas(id) ON DELETE CASCADE,
     ticket_number VARCHAR(50) UNIQUE NOT NULL,
-    payment_status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'confirmed', 'failed')),
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'confirmed' CHECK (payment_status IN ('confirmed')),
     payment_reference VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -382,4 +382,15 @@ CREATE POLICY "Commission tiers are deletable by authenticated users" ON commiss
 CREATE POLICY "Commission payments are viewable by everyone" ON commission_payments FOR SELECT USING (true);
 CREATE POLICY "Commission payments are insertable by authenticated users" ON commission_payments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Commission payments are updatable by authenticated users" ON commission_payments FOR UPDATE USING (true);
-CREATE POLICY "Commission payments are deletable by authenticated users" ON commission_payments FOR DELETE USING (true); 
+CREATE POLICY "Commission payments are deletable by authenticated users" ON commission_payments FOR DELETE USING (true);
+
+-- Mettre à jour les anciens statuts
+UPDATE participants SET payment_status = 'confirmed' WHERE payment_status IN ('pending', 'failed');
+
+-- Modifier la contrainte CHECK
+ALTER TABLE participants
+  DROP CONSTRAINT IF EXISTS participants_payment_status_check,
+  ALTER COLUMN payment_status SET DEFAULT 'confirmed';
+
+ALTER TABLE participants
+  ADD CONSTRAINT participants_payment_status_check CHECK (payment_status IN ('confirmed')); 

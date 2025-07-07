@@ -138,26 +138,33 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
       const responseText = await response.text();
 
       if (!responseText.includes("successfully processed")) {
-        throw new Error('Paiement échoué');
+        setPaymentStatus('error');
+        setIsProcessing(false);
+        toast({
+          title: "Paiement échoué",
+          description: "Le paiement via Airtel Money a échoué. Veuillez réessayer ou vérifier votre solde.",
+          variant: "destructive"
+        });
+        return;
       }
 
-      // Si le paiement est réussi, créer le participant
+      // Si le paiement est réussi, créer le participant avec payment_status 'confirmed'
       const { data: participant, error: participantError } = await createParticipant({
         name: formData.name,
         phone: formData.phone,
         tombolaId: tombola.id,
         airtelMoneyNumber: formData.airtelMoneyNumber
-      });
+      }, 'confirmed');
 
-      if (participantError) {
-        throw new Error('Erreur lors de la création du participant');
-      }
-
-      // Mettre à jour le statut de paiement à 'confirmed' après paiement réussi
-      const { error: updateError } = await updateParticipantPayment(participant.id, 'confirmed');
-      if (updateError) {
-        console.error('Erreur lors de la mise à jour du statut de paiement:', updateError);
-        // Ne pas faire échouer le processus pour cette erreur
+      if (participantError || !participant) {
+        setPaymentStatus('error');
+        setIsProcessing(false);
+        toast({
+          title: "Erreur d'inscription",
+          description: "Votre paiement a été validé mais une erreur est survenue lors de l'inscription. Merci de contacter le support.",
+          variant: "destructive"
+        });
+        return;
       }
 
       // Si un coupon valide a été utilisé, enregistrer son utilisation

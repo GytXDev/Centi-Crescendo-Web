@@ -334,16 +334,33 @@ export async function getGlobalStats() {
 
         if (participantsError) throw participantsError;
 
-        // Calculer les revenus totaux en comptant les participants confirmés par tombola
-        let totalRevenue = 0;
-        for (const tombola of tombolas) {
-            const { count: participantsCount } = await supabase
-                .from('participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('tombola_id', tombola.id)
-                .eq('payment_status', 'confirmed');
+        // Récupérer tous les participants confirmés
+        const { data: participants } = await supabase
+            .from('participants')
+            .select('id, tombola_id, payment_status')
+            .eq('payment_status', 'confirmed');
 
-            totalRevenue += (participantsCount || 0) * tombola.ticket_price;
+        // Récupérer tous les coupon_uses (tickets achetés avec coupon)
+        const { data: couponUses } = await supabase
+            .from('coupon_uses')
+            .select('participant_id, final_price');
+
+        // Map pour retrouver le prix payé par participant via coupon
+        const couponPriceByParticipant = {};
+        (couponUses || []).forEach(cu => {
+            couponPriceByParticipant[cu.participant_id] = cu.final_price;
+        });
+
+        // Calculer les revenus totaux en additionnant le prix payé par chaque participant
+        let totalRevenue = 0;
+        for (const participant of participants || []) {
+            if (couponPriceByParticipant[participant.id] !== undefined) {
+                totalRevenue += couponPriceByParticipant[participant.id];
+            } else {
+                // Trouver le prix du ticket de la tombola associée
+                const tombola = tombolas.find(t => t.id === participant.tombola_id);
+                totalRevenue += tombola ? tombola.ticket_price : 0;
+            }
         }
 
         // Calculer les statistiques

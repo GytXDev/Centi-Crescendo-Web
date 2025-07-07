@@ -154,7 +154,7 @@ function HomePage() {
             >
               {currentTombola && (
                 <h1 className="text-5xl md:text-6xl font-bold mb-6">
-                  🎯 Gagnez <span className="text-yellow-400">
+                  🎯 Gagne <span className="text-yellow-400">
                     {new Intl.NumberFormat('fr-FR').format(currentTombola.jackpot)} FCFA !
                   </span>
                 </h1>

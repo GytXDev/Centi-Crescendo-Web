@@ -50,10 +50,17 @@ export const generateTicketPDF = (ticketData) => {
     ['Nom complet:', ticketData.name],
     ['Numéro de téléphone:', ticketData.phone],
     ['Numéro de ticket:', ticketData.ticketNumber],
+    ['Prix original:', `${ticketData.originalPrice || ticketData.price} FCFA`],
     ['Prix payé:', `${ticketData.price} FCFA`],
     ['Date du tirage:', new Date(ticketData.drawDate).toLocaleDateString('fr-FR')],
     ['Tombola:', ticketData.tombolaTitle]
   ];
+
+  // Ajouter les informations du coupon si applicable
+  if (ticketData.couponCode && ticketData.discountAmount > 0) {
+    details.splice(4, 0, ['Code coupon:', ticketData.couponCode]);
+    details.splice(5, 0, ['Réduction appliquée:', `${ticketData.discountAmount} FCFA`]);
+  }
 
   let yPosition = 80;
   details.forEach(([label, value]) => {

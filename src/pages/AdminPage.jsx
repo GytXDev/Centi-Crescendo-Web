@@ -8,6 +8,7 @@ import CreateTombolaModal from '@/components/CreateTombolaModal';
 import StatsCard from '@/components/StatsCard';
 import Navigation from '@/components/Navigation';
 import AdminLogin from '@/components/AdminLogin';
+import CommissionSummary from '@/components/CommissionSummary';
 import {
   getAllTombolas,
   createTombola,
@@ -16,7 +17,9 @@ import {
   getGlobalStats,
   getAppConfig,
   updateAppConfigById,
-  performDraw
+  performDraw,
+  updateCommissionTiers,
+  getCommissionTiers
 } from '@/lib/supabaseServices';
 import { getPublicUrl } from '@/lib/fileUploadService';
 import VideoUpload from '@/components/VideoUpload';
@@ -115,7 +118,10 @@ function AdminPage() {
 
   const handleCreateTombola = async (tombolaData) => {
     try {
-      const { data, error } = await createTombola(tombolaData);
+      // Extraire les paliers de commission
+      const { commission_tiers, ...tombolaDataWithoutTiers } = tombolaData;
+
+      const { data, error } = await createTombola(tombolaDataWithoutTiers);
 
       if (error) {
         toast({
@@ -124,6 +130,18 @@ function AdminPage() {
           variant: "destructive"
         });
         return;
+      }
+
+      // Créer les paliers de commission si disponibles
+      if (commission_tiers && commission_tiers.length > 0) {
+        try {
+          const { error: tiersError } = await updateCommissionTiers(data.id, commission_tiers);
+          if (tiersError) {
+            console.error('Erreur lors de la création des paliers de commission:', tiersError);
+          }
+        } catch (tiersError) {
+          console.error('Erreur lors de la création des paliers de commission:', tiersError);
+        }
       }
 
       // Recharger les données
@@ -147,7 +165,10 @@ function AdminPage() {
 
   const handleUpdateTombola = async (id, updatedData) => {
     try {
-      const { data, error } = await updateTombola(id, updatedData);
+      // Extraire les paliers de commission
+      const { commission_tiers, ...tombolaDataWithoutTiers } = updatedData;
+
+      const { data, error } = await updateTombola(id, tombolaDataWithoutTiers);
 
       if (error) {
         toast({
@@ -156,6 +177,18 @@ function AdminPage() {
           variant: "destructive"
         });
         return;
+      }
+
+      // Mettre à jour les paliers de commission si disponibles
+      if (commission_tiers && commission_tiers.length > 0) {
+        try {
+          const { error: tiersError } = await updateCommissionTiers(id, commission_tiers);
+          if (tiersError) {
+            console.error('Erreur lors de la mise à jour des paliers de commission:', tiersError);
+          }
+        } catch (tiersError) {
+          console.error('Erreur lors de la mise à jour des paliers de commission:', tiersError);
+        }
       }
 
       // Recharger les données
@@ -488,6 +521,21 @@ function AdminPage() {
               )}
             </motion.div>
           </motion.div>
+
+          {/* Section Récapitulatif des Commissions */}
+          {tombolas.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="mt-8"
+            >
+              <CommissionSummary
+                tombolaId={tombolas[0]?.id}
+                tombolaTitle={tombolas[0]?.title}
+              />
+            </motion.div>
+          )}
         </div>
 
         <CreateTombolaModal
@@ -496,8 +544,8 @@ function AdminPage() {
             setIsCreateModalOpen(false);
             setEditingTombola(null);
           }}
-          onSubmit={editingTombola ? handleUpdateTombola : handleCreateTombola}
-          editingTombola={editingTombola}
+          onSubmit={editingTombola ? (data) => handleUpdateTombola(editingTombola.id, data) : handleCreateTombola}
+          tombola={editingTombola}
         />
 
         <ConfirmModal

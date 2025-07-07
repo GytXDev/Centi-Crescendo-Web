@@ -48,7 +48,7 @@ VITE_POSTGRES_PASSWORD=zt7ik&eNfDuq+L#
 
 ### **Page d'Accueil** (`/`)
 - ✅ Affichage dynamique de la tombola active
-- ✅ Compteur de participants en temps réel
+- ✅ Calcul dynamique du nombre de participants
 - ✅ Liste des gagnants récents
 - ✅ Vidéo des gagnants configurable (upload direct + YouTube supporté)
 - ✅ Modal de participation avec paiement Airtel Money
@@ -80,6 +80,7 @@ VITE_POSTGRES_PASSWORD=zt7ik&eNfDuq+L#
 ### **Gestion des Participants**
 - `getAllParticipants()` - Récupère tous les participants
 - `getParticipantsByTombola()` - Récupère les participants d'une tombola
+- `getTombolaParticipantsCount()` - Calcule dynamiquement le nombre de participants d'une tombola
 - `createParticipant()` - Crée un nouveau participant
 - `updateParticipantPayment()` - Met à jour le statut de paiement
 
@@ -117,7 +118,7 @@ npm run build
 - `max_winners` - Nombre maximum de gagnants
 - `prizes` - Liste des prix (JSON)
 - `status` - Statut (active/completed/cancelled)
-- `participants` - Nombre de participants
+- `participants` - Nombre de participants (calculé dynamiquement)
 - `winner_video_url` - URL de la vidéo des gagnants (uploadée)
 
 ### **Table `participants`**

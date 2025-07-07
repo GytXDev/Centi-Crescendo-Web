@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import HomePage from '@/pages/HomePage';
 import AdminPage from '@/pages/AdminPage';
 import HistoryPage from '@/pages/HistoryPage';
+import CouponDashboardPage from '@/pages/CouponDashboardPage';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/historique" element={<HistoryPage />} />
+          <Route path="/coupons" element={<CouponDashboardPage />} />
         </Routes>
         <Toaster />
       </div>

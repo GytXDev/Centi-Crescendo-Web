@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, Settings, History, Menu, X } from 'lucide-react';
+import { Home, Settings, History, Menu, X, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 function Navigation() {
@@ -10,7 +10,8 @@ function Navigation() {
 
   const navItems = [
     { path: '/', label: 'Accueil', icon: Home },
-    { path: '/historique', label: 'Historique', icon: History }
+    { path: '/historique', label: 'Historique', icon: History },
+    { path: '/coupons', label: 'Mes Coupons', icon: Tag }
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -35,8 +36,8 @@ function Navigation() {
                   key={item.path}
                   to={item.path}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-medium ${isActive(item.path)
-                      ? 'bg-yellow-400 text-black'
-                      : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                    ? 'bg-yellow-400 text-black'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-800'
                     }`}
                 >
                   <Icon className="w-5 h-5" />
@@ -74,8 +75,8 @@ function Navigation() {
                     to={item.path}
                     onClick={() => setIsMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-lg ${isActive(item.path)
-                        ? 'bg-yellow-400 text-black'
-                        : 'text-gray-300 hover:text-white hover:bg-gray-800'
+                      ? 'bg-yellow-400 text-black'
+                      : 'text-gray-300 hover:text-white hover:bg-gray-800'
                       }`}
                   >
                     <Icon className="w-5 h-5" />

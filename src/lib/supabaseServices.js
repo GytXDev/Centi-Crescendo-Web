@@ -13,7 +13,24 @@ export async function getAllTombolas() {
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return { data, error: null };
+
+        // Calculer le nombre de participants pour chaque tombola
+        const tombolasWithParticipants = await Promise.all(
+            (data || []).map(async (tombola) => {
+                const { count: participantsCount, error: countError } = await supabase
+                    .from('participants')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('tombola_id', tombola.id)
+                    .eq('payment_status', 'confirmed');
+
+                return {
+                    ...tombola,
+                    participants: countError ? 0 : (participantsCount || 0)
+                };
+            })
+        );
+
+        return { data: tombolasWithParticipants, error: null };
     } catch (error) {
         console.error('Erreur lors de la récupération des tombolas:', error);
         return { data: null, error };
@@ -32,6 +49,26 @@ export async function getCurrentTombola() {
             .maybeSingle();
 
         if (error) throw error;
+
+        // Si une tombola active est trouvée, calculer le nombre de participants dynamiquement
+        if (data) {
+            const { count: participantsCount, error: countError } = await supabase
+                .from('participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('tombola_id', data.id)
+                .eq('payment_status', 'confirmed');
+
+            if (!countError) {
+                return {
+                    data: {
+                        ...data,
+                        participants: participantsCount || 0
+                    },
+                    error: null
+                };
+            }
+        }
+
         return { data, error: null };
     } catch (error) {
         console.error('Erreur lors de la récupération de la tombola active:', error);
@@ -54,8 +91,7 @@ export async function createTombola(tombolaData) {
                 jackpot: tombolaData.jackpot,
                 max_winners: tombolaData.maxWinners,
                 prizes: tombolaData.prizes,
-                status: 'active',
-                participants: 0
+                status: 'active'
             }])
             .select()
             .single();
@@ -256,21 +292,33 @@ export async function getGlobalStats() {
         // Récupérer le nombre total de tombolas
         const { data: tombolas, error: tombolasError } = await supabase
             .from('tombolas')
-            .select('id, participants, ticket_price, status');
+            .select('id, ticket_price, status');
 
         if (tombolasError) throw tombolasError;
 
-        // Récupérer le nombre total de participants
+        // Récupérer le nombre total de participants confirmés
         const { count: totalParticipants, error: participantsError } = await supabase
             .from('participants')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .eq('payment_status', 'confirmed');
 
         if (participantsError) throw participantsError;
+
+        // Calculer les revenus totaux en comptant les participants confirmés par tombola
+        let totalRevenue = 0;
+        for (const tombola of tombolas) {
+            const { count: participantsCount } = await supabase
+                .from('participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('tombola_id', tombola.id)
+                .eq('payment_status', 'confirmed');
+
+            totalRevenue += (participantsCount || 0) * tombola.ticket_price;
+        }
 
         // Calculer les statistiques
         const totalTombolas = tombolas.length;
         const activeTombolas = tombolas.filter(t => t.status === 'active').length;
-        const totalRevenue = tombolas.reduce((sum, t) => sum + (t.participants || 0) * t.ticket_price, 0);
 
         return {
             data: {
@@ -377,30 +425,31 @@ function generateTicketNumber() {
 }
 
 /**
- * Met à jour le nombre de participants d'une tombola
+ * Calcule le nombre de participants d'une tombola
  */
-export async function updateTombolaParticipants(tombolaId) {
+export async function getTombolaParticipantsCount(tombolaId) {
     try {
-        const { count, error: countError } = await supabase
+        const { count, error } = await supabase
             .from('participants')
             .select('*', { count: 'exact', head: true })
             .eq('tombola_id', tombolaId)
             .eq('payment_status', 'confirmed');
 
-        if (countError) throw countError;
-
-        const { error: updateError } = await supabase
-            .from('tombolas')
-            .update({ participants: count })
-            .eq('id', tombolaId);
-
-        if (updateError) throw updateError;
-
-        return { error: null };
+        if (error) throw error;
+        return { data: count || 0, error: null };
     } catch (error) {
-        console.error('Erreur lors de la mise à jour des participants:', error);
-        return { error };
+        console.error('Erreur lors du calcul du nombre de participants:', error);
+        return { data: 0, error };
     }
+}
+
+/**
+ * Met à jour le nombre de participants d'une tombola (fonction legacy - dépréciée)
+ * @deprecated Utilisez getTombolaParticipantsCount() à la place
+ */
+export async function updateTombolaParticipants(tombolaId) {
+    console.warn('updateTombolaParticipants est dépréciée. Utilisez getTombolaParticipantsCount() à la place.');
+    return getTombolaParticipantsCount(tombolaId);
 }
 
 // ===== SERVICES POUR LE TIRAGE =====
@@ -501,6 +550,490 @@ export async function performDraw(tombolaId) {
         return { data: winners, error: null };
     } catch (error) {
         console.error('Erreur lors du tirage:', error);
+        return { data: null, error };
+    }
+}
+
+// ===== SERVICES POUR LE SYSTÈME DE COUPONS ET PARRAINAGE =====
+
+/**
+ * Crée un nouveau coupon pour une tombola
+ */
+export async function createCoupon(couponData) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .insert([couponData])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la création du coupon:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère tous les coupons d'une tombola
+ */
+export async function getCouponsByTombola(tombolaId) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .select('*')
+            .eq('tombola_id', tombolaId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des coupons:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère un coupon par son code
+ */
+export async function getCouponByCode(code) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .select(`
+                *,
+                tombolas (
+                    id,
+                    title,
+                    ticket_price,
+                    status,
+                    draw_date
+                )
+            `)
+            .eq('code', code)
+            .eq('is_active', true)
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération du coupon:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Vérifie si un coupon est valide pour une tombola
+ */
+export async function validateCoupon(code, tombolaId, userPhone) {
+    try {
+        const { data: coupon, error } = await getCouponByCode(code);
+
+        if (error || !coupon) {
+            return { isValid: false, error: 'Coupon invalide ou inexistant' };
+        }
+
+        // Vérifier que le coupon appartient à la bonne tombola
+        if (coupon.tombola_id !== tombolaId) {
+            return { isValid: false, error: 'Ce coupon n\'est pas valide pour cette tombola' };
+        }
+
+        // Vérifier que l'utilisateur n'utilise pas son propre coupon
+        if (coupon.creator_phone === userPhone) {
+            return { isValid: false, error: 'Vous ne pouvez pas utiliser votre propre coupon' };
+        }
+
+        // Vérifier que la tombola est encore active
+        if (coupon.tombolas.status !== 'active') {
+            return { isValid: false, error: 'Cette tombola n\'est plus active' };
+        }
+
+        // Vérifier que la date de tirage n'est pas dépassée
+        const now = new Date();
+        const drawDate = new Date(coupon.tombolas.draw_date);
+        if (now >= drawDate) {
+            return { isValid: false, error: 'Les participations sont fermées pour cette tombola' };
+        }
+
+        return {
+            isValid: true,
+            coupon: coupon,
+            discountAmount: Math.floor(coupon.tombolas.ticket_price * coupon.discount_percentage / 100)
+        };
+    } catch (error) {
+        console.error('Erreur lors de la validation du coupon:', error);
+        return { isValid: false, error: 'Erreur lors de la validation du coupon' };
+    }
+}
+
+/**
+ * Enregistre l'utilisation d'un coupon
+ */
+export async function useCoupon(couponId, participantId, tombolaId, originalPrice, discountAmount, finalPrice) {
+    try {
+        const { data, error } = await supabase
+            .from('coupon_uses')
+            .insert([{
+                coupon_id: couponId,
+                participant_id: participantId,
+                tombola_id: tombolaId,
+                original_price: originalPrice,
+                discount_amount: discountAmount,
+                final_price: finalPrice
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de l\'utilisation du coupon:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère les statistiques d'un coupon
+ */
+export async function getCouponStats(couponId) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .select(`
+                *,
+                coupon_uses (
+                    id,
+                    final_price,
+                    used_at
+                )
+            `)
+            .eq('id', couponId)
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des statistiques du coupon:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère les coupons créés par un utilisateur (par numéro de téléphone)
+ */
+export async function getCouponsByCreator(creatorPhone) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .select(`
+                *,
+                tombolas (
+                    id,
+                    title,
+                    status
+                ),
+                coupon_uses (
+                    id,
+                    final_price,
+                    used_at
+                )
+            `)
+            .eq('creator_phone', creatorPhone)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des coupons du créateur:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère les paliers de commission pour une tombola
+ */
+export async function getCommissionTiers(tombolaId) {
+    try {
+        const { data, error } = await supabase
+            .from('commission_tiers')
+            .select('*')
+            .eq('tombola_id', tombolaId)
+            .order('min_tickets', { ascending: true });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des paliers de commission:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Crée ou met à jour les paliers de commission pour une tombola
+ */
+export async function updateCommissionTiers(tombolaId, tiers) {
+    try {
+        // Supprimer les anciens paliers
+        const { error: deleteError } = await supabase
+            .from('commission_tiers')
+            .delete()
+            .eq('tombola_id', tombolaId);
+
+        if (deleteError) throw deleteError;
+
+        // Insérer les nouveaux paliers
+        const tiersWithTombolaId = tiers.map(tier => ({
+            ...tier,
+            tombola_id: tombolaId
+        }));
+
+        const { data, error } = await supabase
+            .from('commission_tiers')
+            .insert(tiersWithTombolaId)
+            .select();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour des paliers de commission:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère les statistiques globales des coupons pour une tombola
+ */
+export async function getCouponStatsForTombola(tombolaId) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .select(`
+                id,
+                code,
+                creator_name,
+                total_uses,
+                total_revenue,
+                total_commission,
+                created_at
+            `)
+            .eq('tombola_id', tombolaId)
+            .order('total_uses', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des statistiques des coupons:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Génère un code coupon unique basé sur le nom du créateur
+ */
+export async function generateUniqueCouponCode(creatorName) {
+    try {
+        // Utiliser la fonction PostgreSQL pour générer le code
+        const { data, error } = await supabase
+            .rpc('generate_coupon_code', { creator_name: creatorName });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la génération du code coupon:', error);
+        return { data: null, error };
+    }
+}
+
+// ===== SERVICES POUR LES COMMISSIONS =====
+
+/**
+ * Calcule les commissions pour un coupon basé sur le nombre de tickets vendus
+ */
+export async function calculateCouponCommission(couponId) {
+    try {
+        // Récupérer les informations du coupon et de la tombola
+        const { data: coupon, error: couponError } = await supabase
+            .from('coupons')
+            .select(`
+                *,
+                tombolas (
+                    id,
+                    jackpot,
+                    ticket_price
+                ),
+                coupon_uses (
+                    id,
+                    final_price,
+                    used_at
+                )
+            `)
+            .eq('id', couponId)
+            .single();
+
+        if (couponError) throw couponError;
+
+        // Récupérer les paliers de commission
+        const { data: tiers, error: tiersError } = await getCommissionTiers(coupon.tombola_id);
+        if (tiersError) throw tiersError;
+
+        // Calculer le nombre de tickets vendus
+        const ticketsSold = coupon.coupon_uses.length;
+
+        // Trouver le palier approprié
+        let applicableTier = null;
+        for (let i = tiers.length - 1; i >= 0; i--) {
+            if (ticketsSold >= tiers[i].min_tickets) {
+                applicableTier = tiers[i];
+                break;
+            }
+        }
+
+        if (!applicableTier) {
+            return { data: { commission: 0, tier: null }, error: null };
+        }
+
+        // Calculer la commission
+        const totalRevenue = coupon.coupon_uses.reduce((sum, use) => sum + use.final_price, 0);
+        const commission = (totalRevenue * applicableTier.commission_percentage) / 100;
+
+        return {
+            data: {
+                commission: Math.round(commission),
+                tier: applicableTier,
+                ticketsSold,
+                totalRevenue
+            },
+            error: null
+        };
+    } catch (error) {
+        console.error('Erreur lors du calcul de la commission:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Met à jour les commissions pour tous les coupons d'une tombola
+ */
+export async function updateAllCommissionsForTombola(tombolaId) {
+    try {
+        // Récupérer tous les coupons de la tombola
+        const { data: coupons, error: couponsError } = await getCouponsByTombola(tombolaId);
+        if (couponsError) throw couponsError;
+
+        const updates = [];
+        for (const coupon of coupons) {
+            const { data: commissionData } = await calculateCouponCommission(coupon.id);
+            if (commissionData) {
+                updates.push({
+                    id: coupon.id,
+                    total_commission: commissionData.commission
+                });
+            }
+        }
+
+        // Mettre à jour tous les coupons
+        if (updates.length > 0) {
+            const { error: updateError } = await supabase
+                .from('coupons')
+                .upsert(updates);
+
+            if (updateError) throw updateError;
+        }
+
+        return { data: updates.length, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour des commissions:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère le récapitulatif des commissions pour une tombola
+ */
+export async function getCommissionSummaryForTombola(tombolaId) {
+    try {
+        // Récupérer les statistiques des coupons
+        const { data: couponStats, error: statsError } = await getCouponStatsForTombola(tombolaId);
+        if (statsError) throw statsError;
+
+        // Récupérer les paliers de commission
+        const { data: tiers, error: tiersError } = await getCommissionTiers(tombolaId);
+        if (tiersError) throw tiersError;
+
+        // Calculer les totaux
+        const totalCommissions = couponStats.reduce((sum, coupon) => sum + parseFloat(coupon.total_commission || 0), 0);
+        const totalRevenue = couponStats.reduce((sum, coupon) => sum + parseFloat(coupon.total_revenue || 0), 0);
+        const totalTickets = couponStats.reduce((sum, coupon) => sum + (coupon.total_uses || 0), 0);
+
+        // Trier les parrains par performance
+        const topSponsors = couponStats
+            .filter(coupon => coupon.total_uses > 0)
+            .sort((a, b) => b.total_uses - a.total_uses)
+            .slice(0, 10); // Top 10
+
+        return {
+            data: {
+                totalCommissions: Math.round(totalCommissions),
+                totalRevenue: Math.round(totalRevenue),
+                totalTickets,
+                topSponsors,
+                tiers,
+                couponStats
+            },
+            error: null
+        };
+    } catch (error) {
+        console.error('Erreur lors de la récupération du récapitulatif des commissions:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Crée un paiement de commission
+ */
+export async function createCommissionPayment(couponId, tierId, amount) {
+    try {
+        const { data, error } = await supabase
+            .from('commission_payments')
+            .insert([{
+                coupon_id: couponId,
+                tier_id: tierId,
+                amount: amount,
+                payment_status: 'pending'
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la création du paiement de commission:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Met à jour le statut d'un paiement de commission
+ */
+export async function updateCommissionPaymentStatus(paymentId, status) {
+    try {
+        const updateData = { payment_status: status };
+        if (status === 'paid') {
+            updateData.payment_date = new Date().toISOString();
+        }
+
+        const { data, error } = await supabase
+            .from('commission_payments')
+            .update(updateData)
+            .eq('id', paymentId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour du statut de paiement:', error);
         return { data: null, error };
     }
 } 

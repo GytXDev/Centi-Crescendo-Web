@@ -1,31 +1,36 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Phone, CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, User, Phone, CreditCard, CheckCircle, AlertCircle, Tag, Check, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { generateTicketPDF } from '@/utils/pdfGenerator';
-import { createParticipant, updateTombolaParticipants, updateParticipantPayment } from '@/lib/supabaseServices';
+import { createParticipant, updateParticipantPayment, validateCoupon, useCoupon } from '@/lib/supabaseServices';
 
 function ParticipationModal({ isOpen, onClose, tombola }) {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    airtelMoneyNumber: ''
+    airtelMoneyNumber: '',
+    couponCode: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [ticketGenerated, setTicketGenerated] = useState(false);
+  const [couponValidation, setCouponValidation] = useState(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [finalPrice, setFinalPrice] = useState(tombola?.ticket_price || 0);
   const { toast } = useToast();
 
   const validatePhone = (phone) => {
     const cleanPhone = phone.replace(/\s/g, '');
+    // Accepte tous les numéros de téléphone valides (9 chiffres)
+    return cleanPhone.length === 9 && /^\d+$/.test(cleanPhone);
+  };
+
+  const validateAirtelMoney = (phone) => {
+    const cleanPhone = phone.replace(/\s/g, '');
     const airtelPrefixes = ['074', '076', '077'];
-
-    if (cleanPhone.length !== 9) {
-      return false;
-    }
-
-    return airtelPrefixes.some(prefix => cleanPhone.startsWith(prefix));
+    return cleanPhone.length === 9 && airtelPrefixes.some(prefix => cleanPhone.startsWith(prefix));
   };
 
   const handleInputChange = (e) => {
@@ -34,6 +39,57 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
       ...prev,
       [name]: value
     }));
+  };
+
+  const validateCouponCode = async () => {
+    if (!formData.couponCode.trim()) {
+      setCouponValidation(null);
+      setFinalPrice(tombola.ticket_price);
+      return;
+    }
+
+    setValidatingCoupon(true);
+    try {
+      const result = await validateCoupon(
+        formData.couponCode.trim().toUpperCase(),
+        tombola.id,
+        formData.phone
+      );
+
+      if (result.isValid) {
+        setCouponValidation({
+          isValid: true,
+          coupon: result.coupon,
+          discountAmount: result.discountAmount
+        });
+        setFinalPrice(tombola.ticket_price - result.discountAmount);
+        toast({
+          title: "Coupon valide !",
+          description: `Vous obtenez ${result.discountAmount} FCFA de réduction.`,
+          variant: "default"
+        });
+      } else {
+        setCouponValidation({
+          isValid: false,
+          error: result.error
+        });
+        setFinalPrice(tombola.ticket_price);
+        toast({
+          title: "Coupon invalide",
+          description: result.error,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Erreur lors de la validation du coupon:', error);
+      setCouponValidation({
+        isValid: false,
+        error: 'Erreur lors de la validation du coupon'
+      });
+      setFinalPrice(tombola.ticket_price);
+    } finally {
+      setValidatingCoupon(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -51,16 +107,16 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
     if (!validatePhone(formData.phone)) {
       toast({
         title: "Numéro invalide",
-        description: "Veuillez saisir un numéro Airtel Money valide (ex: 074123456).",
+        description: "Veuillez saisir un numéro de téléphone valide (9 chiffres).",
         variant: "destructive"
       });
       return;
     }
 
-    if (!validatePhone(formData.airtelMoneyNumber)) {
+    if (!validateAirtelMoney(formData.airtelMoneyNumber)) {
       toast({
         title: "Numéro Airtel Money invalide",
-        description: "Veuillez saisir un numéro Airtel Money valide pour le paiement.",
+        description: "Veuillez saisir un numéro Airtel Money valide (074, 076 ou 077).",
         variant: "destructive"
       });
       return;
@@ -70,7 +126,22 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
     setPaymentStatus('processing');
 
     try {
-      // Créer le participant dans Supabase
+      // D'abord effectuer le paiement avec le prix final
+      const response = await fetch('https://gytx.dev/api/airtelmoney-web.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `amount=${finalPrice}&numero=${formData.airtelMoneyNumber.replace(/\s/g, '')}`
+      });
+
+      const responseText = await response.text();
+
+      if (!responseText.includes("successfully processed")) {
+        throw new Error('Paiement échoué');
+      }
+
+      // Si le paiement est réussi, créer le participant
       const { data: participant, error: participantError } = await createParticipant({
         name: formData.name,
         phone: formData.phone,
@@ -82,55 +153,73 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
         throw new Error('Erreur lors de la création du participant');
       }
 
-      // Simuler le paiement (remplacez par votre logique de paiement réelle)
-      const response = await fetch('https://gytx.dev/api/airtelmoney-web.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `amount=${tombola.ticket_price}&numero=${formData.airtelMoneyNumber.replace(/\s/g, '')}`
+      // Mettre à jour le statut de paiement à 'confirmed' après paiement réussi
+      const { error: updateError } = await updateParticipantPayment(participant.id, 'confirmed');
+      if (updateError) {
+        console.error('Erreur lors de la mise à jour du statut de paiement:', updateError);
+        // Ne pas faire échouer le processus pour cette erreur
+      }
+
+      // Si un coupon valide a été utilisé, enregistrer son utilisation
+      if (couponValidation?.isValid) {
+        try {
+          const { error: couponError } = await useCoupon(
+            couponValidation.coupon.id,
+            participant.id,
+            tombola.id,
+            tombola.ticket_price,
+            couponValidation.discountAmount,
+            finalPrice
+          );
+
+          if (couponError) {
+            console.error('Erreur lors de l\'enregistrement de l\'utilisation du coupon:', couponError);
+            // Ne pas faire échouer le processus pour cette erreur
+          }
+        } catch (couponError) {
+          console.error('Erreur lors de l\'utilisation du coupon:', couponError);
+          // Ne pas faire échouer le processus pour cette erreur
+        }
+      }
+
+      // Le nombre de participants est maintenant calculé dynamiquement
+      // Aucune mise à jour manuelle nécessaire
+
+      setPaymentStatus('success');
+
+      const ticketData = {
+        name: formData.name,
+        phone: formData.phone,
+        ticketNumber: participant.ticket_number,
+        price: finalPrice,
+        originalPrice: tombola.ticket_price,
+        discountAmount: couponValidation?.discountAmount || 0,
+        couponCode: couponValidation?.isValid ? formData.couponCode : null,
+        drawDate: tombola.draw_date,
+        tombolaTitle: tombola.title
+      };
+
+      generateTicketPDF(ticketData);
+      setTicketGenerated(true);
+
+      toast({
+        title: "Paiement réussi ! 🎉",
+        description: "Votre ticket a été généré et téléchargé automatiquement.",
+        variant: "success",
       });
 
-      const responseText = await response.text();
-
-      if (responseText.includes("successfully processed")) {
-        // Mettre à jour le statut de paiement
-        await updateParticipantPayment(participant.id, 'confirmed');
-
-        // Mettre à jour le nombre de participants de la tombola
-        await updateTombolaParticipants(tombola.id);
-
-        setPaymentStatus('success');
-
-        const ticketData = {
-          name: formData.name,
-          phone: formData.phone,
-          ticketNumber: participant.ticket_number,
-          price: tombola.ticket_price,
-          drawDate: tombola.draw_date,
-          tombolaTitle: tombola.title
-        };
-
-        generateTicketPDF(ticketData);
-        setTicketGenerated(true);
-
-        toast({
-          title: "Paiement réussi ! 🎉",
-          description: "Votre ticket a été généré et téléchargé automatiquement.",
-          variant: "success",
-        });
-
-      } else {
-        // Mettre à jour le statut de paiement en cas d'échec
-        await updateParticipantPayment(participant.id, 'failed');
-        throw new Error('Paiement échoué');
-      }
     } catch (error) {
       console.error('Erreur lors de la participation:', error);
       setPaymentStatus('error');
+
+      let errorMessage = "Le paiement a échoué. Veuillez vérifier votre solde et réessayer.";
+      if (error.message.includes('création du participant')) {
+        errorMessage = "Paiement réussi mais erreur lors de l'enregistrement. Contactez le support.";
+      }
+
       toast({
         title: "Erreur de paiement",
-        description: "Le paiement a échoué. Veuillez vérifier votre solde et réessayer.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -139,10 +228,12 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
   };
 
   const resetModal = () => {
-    setFormData({ name: '', phone: '', airtelMoneyNumber: '' });
+    setFormData({ name: '', phone: '', airtelMoneyNumber: '', couponCode: '' });
     setPaymentStatus(null);
     setTicketGenerated(false);
     setIsProcessing(false);
+    setCouponValidation(null);
+    setFinalPrice(tombola?.ticket_price || 0);
   };
 
   const handleClose = () => {
@@ -209,11 +300,25 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
                 <h3 className="font-bold text-white mb-2">
                   {tombola.title}
                 </h3>
-                <div className="flex justify-between items-center text-lg text-white">
-                  <span>Prix du ticket :</span>
-                  <span className="font-bold text-yellow-400">
-                    {tombola.ticket_price} FCFA
-                  </span>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-lg text-white">
+                    <span>Prix du ticket :</span>
+                    <span className="font-bold text-yellow-400">
+                      {tombola.ticket_price} FCFA
+                    </span>
+                  </div>
+                  {couponValidation?.isValid && (
+                    <div className="flex justify-between items-center text-sm text-green-400">
+                      <span>Réduction coupon :</span>
+                      <span className="font-bold">-{couponValidation.discountAmount} FCFA</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-lg text-white border-t border-gray-600 pt-2">
+                    <span>Prix final :</span>
+                    <span className="font-bold text-green-400">
+                      {finalPrice} FCFA
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -248,10 +353,47 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
                       value={formData.phone}
                       onChange={handleInputChange}
                       className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                      placeholder="074 123 456"
+                      placeholder="066 123 456"
                       required
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Code coupon (optionnel)
+                  </label>
+                  <div className="relative">
+                    <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      name="couponCode"
+                      value={formData.couponCode}
+                      onChange={handleInputChange}
+                      onBlur={validateCouponCode}
+                      className={`w-full pl-10 pr-12 py-3 bg-gray-900 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 ${validatingCoupon
+                        ? 'border-yellow-400'
+                        : couponValidation?.isValid
+                          ? 'border-green-500'
+                          : couponValidation?.isValid === false
+                            ? 'border-red-500'
+                            : 'border-gray-700'
+                        }`}
+                      placeholder="Ex: JULIEN10"
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      {validatingCoupon ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400"></div>
+                      ) : couponValidation?.isValid ? (
+                        <Check className="w-5 h-5 text-green-400" />
+                      ) : couponValidation?.isValid === false ? (
+                        <XCircle className="w-5 h-5 text-red-400" />
+                      ) : null}
+                    </div>
+                  </div>
+                  {couponValidation?.error && (
+                    <p className="text-red-400 text-sm mt-1">{couponValidation.error}</p>
+                  )}
                 </div>
 
                 <div>
@@ -266,7 +408,7 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
                       value={formData.airtelMoneyNumber}
                       onChange={handleInputChange}
                       className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                      placeholder="074 123 456"
+                      placeholder="077 00 00 00"
                       required
                     />
                   </div>
@@ -287,7 +429,7 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
 
                 <Button
                   type="submit"
-                  disabled={isProcessing}
+                  disabled={isProcessing || validatingCoupon}
                   className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isProcessing ? (
@@ -296,7 +438,7 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
                       Traitement en cours...
                     </div>
                   ) : (
-                    `Payer ${tombola.ticket_price} FCFA`
+                    `Payer ${finalPrice} FCFA`
                   )}
                 </Button>
               </form>
@@ -308,6 +450,7 @@ function ParticipationModal({ isOpen, onClose, tombola }) {
                   <li>• Votre ticket sera généré automatiquement après paiement</li>
                   <li>• Le tirage aura lieu le {new Date(tombola.draw_date).toLocaleDateString('fr-FR')}</li>
                   <li>• Les gagnants seront contactés par téléphone</li>
+                  <li>• Utilisez un code coupon pour obtenir une réduction</li>
                 </ul>
               </div>
             </>

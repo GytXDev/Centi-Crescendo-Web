@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
-import { Gift, Trophy, Users, PlayCircle } from 'lucide-react';
+import { Gift, Trophy, Users, PlayCircle, Tag, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ParticipationModal from '@/components/ParticipationModal';
+import CreateCouponModal from '@/components/CreateCouponModal';
 import Countdown from '@/components/Countdown';
 import WinnerCard from '@/components/WinnerCard';
 import Navigation from '@/components/Navigation';
@@ -15,6 +16,7 @@ import VideoPlayer from '@/components/YouTubeVideo';
 function HomePage() {
   const [currentTombola, setCurrentTombola] = useState(null);
   const [isParticipationOpen, setIsParticipationOpen] = useState(false);
+  const [isCreateCouponOpen, setIsCreateCouponOpen] = useState(false);
   const [winners, setWinners] = useState([]);
   const [winnerVideoUrl, setWinnerVideoUrl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -152,10 +154,11 @@ function HomePage() {
             >
               {currentTombola && (
                 <h1 className="text-5xl md:text-6xl font-bold mb-6">
-                  🎯 Gagnez <span className="text-yellow-400">{currentTombola.jackpot} !</span>
+                  🎯 Gagnez <span className="text-yellow-400">
+                    {new Intl.NumberFormat('fr-FR').format(currentTombola.jackpot)} FCFA !
+                  </span>
                 </h1>
               )}
-
               {currentTombola?.description && (
                 <p className="text-xl md:text-2xl text-gray-300 mb-8 leading-relaxed">
                   {currentTombola.description}
@@ -360,6 +363,151 @@ function HomePage() {
           </div>
         </section>
 
+        {/* SECTION COUPONS ET PARRAINAGE */}
+        <section className="py-16 px-4 bg-black">
+          <div className="container mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center mb-12"
+            >
+              <h2 className="text-4xl font-bold text-white mb-4">
+                🎫 Créez votre Coupon et Gagnez des Commissions !
+              </h2>
+              <p className="text-gray-300 text-lg max-w-3xl mx-auto">
+                Devenez parrain et gagnez de l'argent en partageant vos coupons. Plus vos amis participent, plus vous gagnez !
+              </p>
+            </motion.div>
+
+            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, x: -30 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="bg-[#1C1C21]/50 border border-gray-800 rounded-2xl p-8"
+              >
+                <div className="text-center mb-6">
+                  <div className="w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Tag className="text-yellow-400" size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2">Créez votre Coupon</h3>
+                  <p className="text-gray-400">
+                    Générez un code unique et partagez-le avec vos amis
+                  </p>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
+                      <span className="text-green-400 text-sm font-bold">1</span>
+                    </div>
+                    <span className="text-gray-300">Remplissez vos informations</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
+                      <span className="text-green-400 text-sm font-bold">2</span>
+                    </div>
+                    <span className="text-gray-300">Recevez votre code unique</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
+                      <span className="text-green-400 text-sm font-bold">3</span>
+                    </div>
+                    <span className="text-gray-300">Partagez et gagnez des commissions</span>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => setIsCreateCouponOpen(true)}
+                  className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-3"
+                >
+                  Créer mon Coupon
+                </Button>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 30 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="bg-[#1C1C21]/50 border border-gray-800 rounded-2xl p-8"
+              >
+                <div className="text-center mb-6">
+                  <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <TrendingUp className="text-blue-400" size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2">Système de Commissions</h3>
+                  <p className="text-gray-400">
+                    Gagnez de l'argent selon vos performances
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-gray-900/50 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300">Bronze</span>
+                      <span className="text-yellow-400 font-bold">3%</span>
+                    </div>
+                    <p className="text-gray-400 text-sm">50 tickets vendus</p>
+                  </div>
+                  <div className="bg-gray-900/50 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300">Argent</span>
+                      <span className="text-yellow-400 font-bold">5%</span>
+                    </div>
+                    <p className="text-gray-400 text-sm">100 tickets vendus</p>
+                  </div>
+                  <div className="bg-gray-900/50 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300">Or</span>
+                      <span className="text-yellow-400 font-bold">10%</span>
+                    </div>
+                    <p className="text-gray-400 text-sm">200 tickets vendus</p>
+                  </div>
+                  <div className="bg-gray-900/50 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-300">Platine</span>
+                      <span className="text-yellow-400 font-bold">15%</span>
+                    </div>
+                    <p className="text-gray-400 text-sm">500 tickets vendus</p>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="text-center mt-12"
+            >
+              <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl p-6 max-w-2xl mx-auto">
+                <h3 className="text-xl font-bold text-yellow-400 mb-3">
+                  💡 Comment ça marche ?
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-300">
+                  <div>
+                    <p className="font-semibold mb-2">Pour vos amis :</p>
+                    <ul className="space-y-1">
+                      <li>• 10% de réduction sur leur ticket</li>
+                      <li>• Paiement sécurisé via Airtel Money</li>
+                      <li>• Ticket PDF automatique</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="font-semibold mb-2">Pour vous :</p>
+                    <ul className="space-y-1">
+                      <li>• Commissions selon vos ventes</li>
+                      <li>• Suivi en temps réel</li>
+                      <li>• Paiements automatiques</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
         {/* SECTION SUPPORT & CONTACT */}
         <section className="py-12 px-4 bg-black border-t border-gray-800">
           <div className="container mx-auto text-center">
@@ -394,6 +542,12 @@ function HomePage() {
         <ParticipationModal
           isOpen={isParticipationOpen}
           onClose={() => setIsParticipationOpen(false)}
+          tombola={currentTombola}
+        />
+
+        <CreateCouponModal
+          isOpen={isCreateCouponOpen}
+          onClose={() => setIsCreateCouponOpen(false)}
           tombola={currentTombola}
         />
       </div>

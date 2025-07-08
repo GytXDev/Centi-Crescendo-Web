@@ -19,7 +19,9 @@ import {
   updateAppConfigById,
   performDraw,
   updateCommissionTiers,
-  getCommissionTiers
+  getCommissionTiers,
+  getAllCoupons,
+  updateCouponDiscount
 } from '@/lib/supabaseServices';
 import { getPublicUrl } from '@/lib/fileUploadService';
 import VideoUpload from '@/components/VideoUpload';
@@ -43,6 +45,9 @@ function AdminPage() {
   const [confirmDraw, setConfirmDraw] = useState({ open: false, tombola: null });
   const [isWinnerManagerOpen, setIsWinnerManagerOpen] = useState(false);
   const [selectedTombola, setSelectedTombola] = useState(null);
+  const [allCoupons, setAllCoupons] = useState([]);
+  const [editingDiscount, setEditingDiscount] = useState({});
+  const [updatingId, setUpdatingId] = useState(null);
 
   const { toast } = useToast();
 
@@ -116,6 +121,52 @@ function AdminPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Charger tous les coupons pour la gestion admin
+  const loadAllCoupons = async () => {
+    const { data } = await getAllCoupons();
+    setAllCoupons(data || []);
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAllCoupons();
+    }
+  }, [isAuthenticated]);
+
+  const handleDiscountInput = (couponId, value) => {
+    setEditingDiscount(prev => ({ ...prev, [couponId]: value }));
+  };
+
+  const handleUpdateDiscount = async (couponId) => {
+    const newDiscount = parseInt(editingDiscount[couponId], 10);
+    if (isNaN(newDiscount) || newDiscount < 0 || newDiscount > 100) {
+      toast({
+        title: "Erreur",
+        description: "Le pourcentage doit être entre 0 et 100.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setUpdatingId(couponId);
+    const { error } = await updateCouponDiscount(couponId, newDiscount);
+    setUpdatingId(null);
+    if (!error) {
+      toast({
+        title: "Succès",
+        description: "Le pourcentage de réduction a été mis à jour.",
+        variant: "success"
+      });
+      setEditingDiscount(prev => ({ ...prev, [couponId]: undefined }));
+      loadAllCoupons();
+    } else {
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le pourcentage.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -548,6 +599,60 @@ function AdminPage() {
               />
             </motion.div>
           )}
+
+          {/* Section Gestion des Coupons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+            className="bg-[#1C1C21]/50 border border-gray-800 rounded-2xl p-6 mt-8"
+          >
+            <h2 className="text-2xl font-bold text-white mb-6">Gestion des Coupons</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm text-left">
+                <thead>
+                  <tr className="bg-gray-900 text-gray-300">
+                    <th className="px-4 py-2">Code</th>
+                    <th className="px-4 py-2">Parrain</th>
+                    <th className="px-4 py-2">Téléphone</th>
+                    <th className="px-4 py-2">Tombola</th>
+                    <th className="px-4 py-2">Réduction (%)</th>
+                    <th className="px-4 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allCoupons.map(coupon => (
+                    <tr key={coupon.id} className="border-b border-gray-800">
+                      <td className="px-4 py-2 font-mono text-yellow-400">{coupon.code}</td>
+                      <td className="px-4 py-2">{coupon.creator_name}</td>
+                      <td className="px-4 py-2">{coupon.creator_phone}</td>
+                      <td className="px-4 py-2">{coupon.tombolas?.title}</td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={editingDiscount[coupon.id] !== undefined ? editingDiscount[coupon.id] : coupon.discount_percentage}
+                          onChange={e => handleDiscountInput(coupon.id, e.target.value)}
+                          className="w-16 px-2 py-1 rounded bg-gray-800 text-yellow-400 font-bold border border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                          disabled={updatingId === coupon.id}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() => handleUpdateDiscount(coupon.id)}
+                          disabled={updatingId === coupon.id}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded font-bold"
+                        >
+                          {updatingId === coupon.id ? '...' : 'Mettre à jour'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
         </div>
 
         <CreateTombolaModal

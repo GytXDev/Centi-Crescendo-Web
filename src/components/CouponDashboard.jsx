@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { getCouponsByCreator, getCommissionTiers } from '@/lib/supabaseServices';
+import { getCouponsByCreator, getCommissionTiers, updateCouponDiscount } from '@/lib/supabaseServices';
 
 function CouponDashboard({ userPhone }) {
     const [coupons, setCoupons] = useState([]);
@@ -20,6 +20,8 @@ function CouponDashboard({ userPhone }) {
     const [loading, setLoading] = useState(true);
     const [copiedCode, setCopiedCode] = useState(null);
     const { toast } = useToast();
+    const [editingDiscount, setEditingDiscount] = useState({});
+    const [updatingId, setUpdatingId] = useState(null);
 
     useEffect(() => {
         if (userPhone) {
@@ -123,6 +125,40 @@ function CouponDashboard({ userPhone }) {
         const progress = ((coupon.total_uses - currentTierTickets) / (nextTierTickets - currentTierTickets)) * 100;
 
         return Math.min(100, Math.max(0, progress));
+    };
+
+    const handleDiscountInput = (couponId, value) => {
+        setEditingDiscount(prev => ({ ...prev, [couponId]: value }));
+    };
+
+    const handleUpdateDiscount = async (couponId) => {
+        const newDiscount = parseInt(editingDiscount[couponId], 10);
+        if (isNaN(newDiscount) || newDiscount < 0 || newDiscount > 100) {
+            toast({
+                title: "Erreur",
+                description: "Le pourcentage doit être entre 0 et 100.",
+                variant: "destructive"
+            });
+            return;
+        }
+        setUpdatingId(couponId);
+        const { error } = await updateCouponDiscount(couponId, newDiscount);
+        setUpdatingId(null);
+        if (!error) {
+            toast({
+                title: "Succès",
+                description: "Le pourcentage de réduction a été mis à jour.",
+                variant: "success"
+            });
+            setEditingDiscount(prev => ({ ...prev, [couponId]: undefined }));
+            loadUserCoupons();
+        } else {
+            toast({
+                title: "Erreur",
+                description: "Impossible de mettre à jour le pourcentage.",
+                variant: "destructive"
+            });
+        }
     };
 
     if (loading) {

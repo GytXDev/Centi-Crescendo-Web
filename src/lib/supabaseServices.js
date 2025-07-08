@@ -892,6 +892,25 @@ export async function generateUniqueCouponCode(creatorName) {
     }
 }
 
+/**
+ * Met à jour le pourcentage de discount d'un coupon
+ */
+export async function updateCouponDiscount(couponId, newDiscount) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .update({ discount_percentage: newDiscount })
+            .eq('id', couponId)
+            .select()
+            .single();
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour du discount:', error);
+        return { data: null, error };
+    }
+}
+
 // ===== SERVICES POUR LES COMMISSIONS =====
 
 /**
@@ -1100,6 +1119,20 @@ export async function updateWinnerPhotoUrl(winnerId, photoUrl) {
         return { data, error: null };
     } catch (error) {
         console.error("Erreur lors de la mise à jour de la photo du gagnant:", error);
+        return { data: null, error };
+    }
+}
+
+export async function getAllCoupons() {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .select(`*, tombolas (title), creator_name, creator_phone`)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération de tous les coupons:', error);
         return { data: null, error };
     }
 } 

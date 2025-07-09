@@ -13,12 +13,12 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
     maxWinners: '',
     prizes: [{ name: '', value: '', image: '' }],
     jackpot: '',
-    commissionTiers: [
-      { tier_name: 'Bronze', min_tickets: 50, commission_percentage: 3 },
-      { tier_name: 'Argent', min_tickets: 100, commission_percentage: 5 },
-      { tier_name: 'Or', min_tickets: 200, commission_percentage: 10 },
-      { tier_name: 'Platine', min_tickets: 500, commission_percentage: 15 }
-    ]
+    // commissionTiers: [
+    //   { tier_name: 'Bronze', min_tickets: 50, commission_percentage: 3 },
+    //   { tier_name: 'Argent', min_tickets: 100, commission_percentage: 5 },
+    //   { tier_name: 'Or', min_tickets: 200, commission_percentage: 10 },
+    //   { tier_name: 'Platine', min_tickets: 500, commission_percentage: 15 }
+    // ]
   });
   const { toast } = useToast();
 
@@ -33,12 +33,12 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
         maxWinners: tombola.max_winners || tombola.maxWinners || '',
         prizes: tombola.prizes || [{ name: '', value: '', image: '' }],
         jackpot: tombola.jackpot || '',
-        commissionTiers: tombola.commission_tiers || [
-          { tier_name: 'Bronze', min_tickets: 50, commission_percentage: 3 },
-          { tier_name: 'Argent', min_tickets: 100, commission_percentage: 5 },
-          { tier_name: 'Or', min_tickets: 200, commission_percentage: 10 },
-          { tier_name: 'Platine', min_tickets: 500, commission_percentage: 15 }
-        ]
+        // commissionTiers: tombola.commission_tiers || [
+        //   { tier_name: 'Bronze', min_tickets: 50, commission_percentage: 3 },
+        //   { tier_name: 'Argent', min_tickets: 100, commission_percentage: 5 },
+        //   { tier_name: 'Or', min_tickets: 200, commission_percentage: 10 },
+        //   { tier_name: 'Platine', min_tickets: 500, commission_percentage: 15 }
+        // ]
       });
     } else {
       resetForm();
@@ -79,31 +79,8 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
     }
   };
 
-  const handleCommissionTierChange = (index, field, value) => {
-    const updatedTiers = [...formData.commissionTiers];
-    updatedTiers[index][field] = value;
-    setFormData(prev => ({
-      ...prev,
-      commissionTiers: updatedTiers
-    }));
-  };
-
-  const addCommissionTier = () => {
-    setFormData(prev => ({
-      ...prev,
-      commissionTiers: [...prev.commissionTiers, { tier_name: '', min_tickets: 0, commission_percentage: 0 }]
-    }));
-  };
-
-  const removeCommissionTier = (index) => {
-    if (formData.commissionTiers.length > 1) {
-      const updatedTiers = formData.commissionTiers.filter((_, i) => i !== index);
-      setFormData(prev => ({
-        ...prev,
-        commissionTiers: updatedTiers
-      }));
-    }
-  };
+  // SUPPRESSION DE LA LOGIQUE DE PALIERS DE COMMISSION
+  // (commission_tiers)
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -166,9 +143,9 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
         ...prize,
         image: prize.image || `Prix ${prize.name}`
       })),
-      commission_tiers: formData.commissionTiers.filter(tier =>
-        tier.tier_name.trim() && tier.min_tickets > 0 && tier.commission_percentage > 0
-      )
+      // commission_tiers: formData.commissionTiers.filter(tier =>
+      //   tier.tier_name.trim() && tier.min_tickets > 0 && tier.commission_percentage > 0
+      // )
     };
 
     onSubmit(tombolaData);
@@ -184,12 +161,12 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
       maxWinners: '',
       prizes: [{ name: '', value: '', image: '' }],
       jackpot: '',
-      commissionTiers: [
-        { tier_name: 'Bronze', min_tickets: 50, commission_percentage: 3 },
-        { tier_name: 'Argent', min_tickets: 100, commission_percentage: 5 },
-        { tier_name: 'Or', min_tickets: 200, commission_percentage: 10 },
-        { tier_name: 'Platine', min_tickets: 500, commission_percentage: 15 }
-      ]
+      // commissionTiers: [
+      //   { tier_name: 'Bronze', min_tickets: 50, commission_percentage: 3 },
+      //   { tier_name: 'Argent', min_tickets: 100, commission_percentage: 5 },
+      //   { tier_name: 'Or', min_tickets: 200, commission_percentage: 10 },
+      //   { tier_name: 'Platine', min_tickets: 500, commission_percentage: 15 }
+      // ]
     });
   };
 
@@ -379,82 +356,8 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
             </div>
 
             {/* Section Paliers de Commission */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <label className="block text-gray-300 text-sm font-medium">
-                  Paliers de Commission pour les Parrains
-                </label>
-                <Button
-                  type="button"
-                  onClick={addCommissionTier}
-                  size="sm"
-                  className="bg-blue-500 hover:bg-blue-600 text-white"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Ajouter un palier
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {formData.commissionTiers.map((tier, index) => (
-                  <div key={index} className="bg-gray-900/50 rounded-xl p-4 border border-gray-700">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-white font-medium">Palier #{index + 1}</h4>
-                      {formData.commissionTiers.length > 1 && (
-                        <Button
-                          type="button"
-                          onClick={() => removeCommissionTier(index)}
-                          size="icon"
-                          variant="ghost"
-                          className="text-red-400 hover:bg-red-400/10 hover:text-red-300"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="grid md:grid-cols-3 gap-3">
-                      <input
-                        type="text"
-                        value={tier.tier_name}
-                        onChange={(e) => handleCommissionTierChange(index, 'tier_name', e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        placeholder="Nom du palier (ex: Bronze)"
-                      />
-                      <input
-                        type="number"
-                        value={tier.min_tickets}
-                        onChange={(e) => handleCommissionTierChange(index, 'min_tickets', parseInt(e.target.value) || 0)}
-                        className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        placeholder="Tickets minimum"
-                        min="0"
-                      />
-                      <input
-                        type="number"
-                        value={tier.commission_percentage}
-                        onChange={(e) => handleCommissionTierChange(index, 'commission_percentage', parseInt(e.target.value) || 0)}
-                        className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        placeholder="% Commission"
-                        min="0"
-                        max="100"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                <div className="text-sm text-blue-200">
-                  <p className="font-semibold mb-2">💡 Comment fonctionnent les commissions ?</p>
-                  <ul className="space-y-1 text-xs">
-                    <li>• Les parrains gagnent des commissions selon le nombre de tickets vendus</li>
-                    <li>• Plus ils vendent de tickets, plus leur pourcentage de commission augmente</li>
-                    <li>• Les commissions sont calculées sur le montant final payé par les clients</li>
-                    <li>• Le total des commissions est déduit du jackpot de la tombola</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+            {/* SUPPRESSION DE LA LOGIQUE DE PALIERS DE COMMISSION */}
+            {/* (commission_tiers) */}
 
             <div className="flex gap-4 pt-4">
               <Button

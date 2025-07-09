@@ -155,7 +155,7 @@ function CouponDashboardPage() {
                                             variant="outline"
                                             className="border-gray-600 text-gray-300 hover:bg-gray-800"
                                         >
-                                            Changer de numéro
+                                            Modifier mon numéro de téléphone
                                         </Button>
                                     </div>
                                 </motion.div>

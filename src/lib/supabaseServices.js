@@ -719,6 +719,7 @@ export async function validateCoupon(code, tombolaId, userPhone) {
  */
 export async function useCoupon(couponId, participantId, tombolaId, originalPrice, discountAmount, finalPrice) {
     try {
+        const commissionEarned = discountAmount * 2;
         const { data, error } = await supabase
             .from('coupon_uses')
             .insert([{
@@ -727,7 +728,8 @@ export async function useCoupon(couponId, participantId, tombolaId, originalPric
                 tombola_id: tombolaId,
                 original_price: originalPrice,
                 discount_amount: discountAmount,
-                final_price: finalPrice
+                final_price: finalPrice,
+                commission_earned: commissionEarned
             }])
             .select()
             .single();
@@ -798,57 +800,6 @@ export async function getCouponsByCreator(creatorPhone) {
 }
 
 /**
- * Récupère les paliers de commission pour une tombola
- */
-export async function getCommissionTiers(tombolaId) {
-    try {
-        const { data, error } = await supabase
-            .from('commission_tiers')
-            .select('*')
-            .eq('tombola_id', tombolaId)
-            .order('min_tickets', { ascending: true });
-
-        if (error) throw error;
-        return { data, error: null };
-    } catch (error) {
-        console.error('Erreur lors de la récupération des paliers de commission:', error);
-        return { data: null, error };
-    }
-}
-
-/**
- * Crée ou met à jour les paliers de commission pour une tombola
- */
-export async function updateCommissionTiers(tombolaId, tiers) {
-    try {
-        // Supprimer les anciens paliers
-        const { error: deleteError } = await supabase
-            .from('commission_tiers')
-            .delete()
-            .eq('tombola_id', tombolaId);
-
-        if (deleteError) throw deleteError;
-
-        // Insérer les nouveaux paliers
-        const tiersWithTombolaId = tiers.map(tier => ({
-            ...tier,
-            tombola_id: tombolaId
-        }));
-
-        const { data, error } = await supabase
-            .from('commission_tiers')
-            .insert(tiersWithTombolaId)
-            .select();
-
-        if (error) throw error;
-        return { data, error: null };
-    } catch (error) {
-        console.error('Erreur lors de la mise à jour des paliers de commission:', error);
-        return { data: null, error };
-    }
-}
-
-/**
  * Récupère les statistiques globales des coupons pour une tombola
  */
 export async function getCouponStatsForTombola(tombolaId) {
@@ -914,107 +865,6 @@ export async function updateCouponDiscount(couponId, newDiscount) {
 // ===== SERVICES POUR LES COMMISSIONS =====
 
 /**
- * Calcule les commissions pour un coupon basé sur le nombre de tickets vendus
- */
-export async function calculateCouponCommission(couponId) {
-    try {
-        // Récupérer les informations du coupon et de la tombola
-        const { data: coupon, error: couponError } = await supabase
-            .from('coupons')
-            .select(`
-                *,
-                tombolas (
-                    id,
-                    jackpot,
-                    ticket_price
-                ),
-                coupon_uses (
-                    id,
-                    final_price,
-                    used_at
-                )
-            `)
-            .eq('id', couponId)
-            .single();
-
-        if (couponError) throw couponError;
-
-        // Récupérer les paliers de commission
-        const { data: tiers, error: tiersError } = await getCommissionTiers(coupon.tombola_id);
-        if (tiersError) throw tiersError;
-
-        // Calculer le nombre de tickets vendus
-        const ticketsSold = coupon.coupon_uses.length;
-
-        // Trouver le palier approprié
-        let applicableTier = null;
-        for (let i = tiers.length - 1; i >= 0; i--) {
-            if (ticketsSold >= tiers[i].min_tickets) {
-                applicableTier = tiers[i];
-                break;
-            }
-        }
-
-        if (!applicableTier) {
-            return { data: { commission: 0, tier: null }, error: null };
-        }
-
-        // Calculer la commission
-        const totalRevenue = coupon.coupon_uses.reduce((sum, use) => sum + use.final_price, 0);
-        const commission = (totalRevenue * applicableTier.commission_percentage) / 100;
-
-        return {
-            data: {
-                commission: Math.round(commission),
-                tier: applicableTier,
-                ticketsSold,
-                totalRevenue
-            },
-            error: null
-        };
-    } catch (error) {
-        console.error('Erreur lors du calcul de la commission:', error);
-        return { data: null, error };
-    }
-}
-
-/**
- * Met à jour les commissions pour tous les coupons d'une tombola
- */
-export async function updateAllCommissionsForTombola(tombolaId) {
-    try {
-        // Récupérer tous les coupons de la tombola
-        const { data: coupons, error: couponsError } = await getCouponsByTombola(tombolaId);
-        if (couponsError) throw couponsError;
-
-        const updates = [];
-        for (const coupon of coupons) {
-            const { data: commissionData } = await calculateCouponCommission(coupon.id);
-            if (commissionData) {
-                updates.push({
-                    id: coupon.id,
-                    total_commission: commissionData.commission
-                });
-            }
-        }
-
-        // Mettre à jour tous les coupons
-        if (updates.length > 0) {
-            const { error: updateError } = await supabase
-                .from('coupons')
-                .upsert(updates);
-
-            if (updateError) throw updateError;
-        }
-
-        return { data: updates.length, error: null };
-    } catch (error) {
-        console.error('Erreur lors de la mise à jour des commissions:', error);
-        return { data: null, error };
-    }
-}
-
-/**
  * Récupère le récapitulatif des commissions pour une tombola
  */
 export async function getCommissionSummaryForTombola(tombolaId) {
@@ -1022,10 +872,6 @@ export async function getCommissionSummaryForTombola(tombolaId) {
         // Récupérer les statistiques des coupons
         const { data: couponStats, error: statsError } = await getCouponStatsForTombola(tombolaId);
         if (statsError) throw statsError;
-
-        // Récupérer les paliers de commission
-        const { data: tiers, error: tiersError } = await getCommissionTiers(tombolaId);
-        if (tiersError) throw tiersError;
 
         // Calculer les totaux
         const totalCommissions = couponStats.reduce((sum, coupon) => sum + parseFloat(coupon.total_commission || 0), 0);
@@ -1044,7 +890,6 @@ export async function getCommissionSummaryForTombola(tombolaId) {
                 totalRevenue: Math.round(totalRevenue),
                 totalTickets,
                 topSponsors,
-                tiers,
                 couponStats
             },
             error: null

@@ -18,8 +18,6 @@ import {
   getAppConfig,
   updateAppConfigById,
   performDraw,
-  updateCommissionTiers,
-  getCommissionTiers,
   getAllCoupons,
   updateCouponDiscount
 } from '@/lib/supabaseServices';

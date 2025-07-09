@@ -12,11 +12,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { getCouponsByCreator, getCommissionTiers, updateCouponDiscount } from '@/lib/supabaseServices';
+import { getCouponsByCreator, updateCouponDiscount } from '@/lib/supabaseServices';
 
 function CouponDashboard({ userPhone }) {
     const [coupons, setCoupons] = useState([]);
-    const [commissionTiers, setCommissionTiers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [copiedCode, setCopiedCode] = useState(null);
     const { toast } = useToast();
@@ -38,20 +37,6 @@ function CouponDashboard({ userPhone }) {
                 console.error('Erreur lors du chargement des coupons:', couponsError);
             } else {
                 setCoupons(userCoupons || []);
-
-                // Charger les paliers de commission pour chaque tombola
-                if (userCoupons && userCoupons.length > 0) {
-                    const tombolaIds = [...new Set(userCoupons.map(c => c.tombola_id))];
-                    const allTiers = {};
-
-                    for (const tombolaId of tombolaIds) {
-                        const { data: tiers, error: tiersError } = await getCommissionTiers(tombolaId);
-                        if (!tiersError && tiers) {
-                            allTiers[tombolaId] = tiers;
-                        }
-                    }
-                    setCommissionTiers(allTiers);
-                }
             }
         } catch (error) {
             console.error('Erreur lors du chargement des données:', error);
@@ -93,38 +78,6 @@ function CouponDashboard({ userPhone }) {
         } else {
             copyToClipboard(code);
         }
-    };
-
-    const getCurrentTier = (coupon) => {
-        const tiers = commissionTiers[coupon.tombola_id] || [];
-        const currentTier = tiers
-            .filter(tier => tier.min_tickets <= coupon.total_uses)
-            .sort((a, b) => b.min_tickets - a.min_tickets)[0];
-
-        return currentTier;
-    };
-
-    const getNextTier = (coupon) => {
-        const tiers = commissionTiers[coupon.tombola_id] || [];
-        const nextTier = tiers
-            .filter(tier => tier.min_tickets > coupon.total_uses)
-            .sort((a, b) => a.min_tickets - b.min_tickets)[0];
-
-        return nextTier;
-    };
-
-    const getProgressPercentage = (coupon) => {
-        const currentTier = getCurrentTier(coupon);
-        const nextTier = getNextTier(coupon);
-
-        if (!currentTier) return 0;
-        if (!nextTier) return 100;
-
-        const currentTierTickets = currentTier.min_tickets;
-        const nextTierTickets = nextTier.min_tickets;
-        const progress = ((coupon.total_uses - currentTierTickets) / (nextTierTickets - currentTierTickets)) * 100;
-
-        return Math.min(100, Math.max(0, progress));
     };
 
     const handleDiscountInput = (couponId, value) => {
@@ -241,10 +194,6 @@ function CouponDashboard({ userPhone }) {
                 <h3 className="text-xl font-bold text-white">Vos Coupons</h3>
 
                 {coupons.map((coupon, index) => {
-                    const currentTier = getCurrentTier(coupon);
-                    const nextTier = getNextTier(coupon);
-                    const progressPercentage = getProgressPercentage(coupon);
-
                     return (
                         <motion.div
                             key={coupon.id}
@@ -301,46 +250,6 @@ function CouponDashboard({ userPhone }) {
                                                 {parseFloat(coupon.total_commission || 0).toLocaleString()} FCFA
                                             </p>
                                         </div>
-                                    </div>
-                                </div>
-
-                                {/* Progression des paliers */}
-                                <div className="md:w-64">
-                                    <div className="bg-gray-900 rounded-lg p-4">
-                                        <div className="flex items-center space-x-2 mb-3">
-                                            <Trophy className="text-yellow-400" size={16} />
-                                            <span className="text-white font-semibold text-sm">
-                                                {currentTier ? `Niveau ${currentTier.tier_name}` : 'Aucun niveau'}
-                                            </span>
-                                        </div>
-
-                                        {currentTier && (
-                                            <div className="mb-2">
-                                                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                                    <span>{currentTier.min_tickets} tickets</span>
-                                                    <span>{currentTier.commission_percentage}% commission</span>
-                                                </div>
-                                                <div className="w-full bg-gray-700 rounded-full h-2">
-                                                    <div
-                                                        className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
-                                                        style={{ width: `${progressPercentage}%` }}
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {nextTier && (
-                                            <div className="text-xs text-gray-400">
-                                                <p>Prochain niveau : {nextTier.tier_name}</p>
-                                                <p>Il vous manque {nextTier.min_tickets - coupon.total_uses} tickets</p>
-                                            </div>
-                                        )}
-
-                                        {!nextTier && currentTier && (
-                                            <div className="text-xs text-green-400">
-                                                <p>Niveau maximum atteint !</p>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -438,38 +438,17 @@ function HomePage() {
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-2">Système de Commissions</h3>
                   <p className="text-gray-400">
-                    Gagnez de l'argent selon vos performances
+                    À chaque ticket acheté avec votre coupon, vous gagnez une commission égale à 2× la réduction appliquée. Par exemple, pour un ticket à 200 CFA et un coupon de 15%, vous gagnez 30×2 = 60 CFA par ticket vendu. Plus vous partagez, plus vous gagnez !
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="bg-gray-900/50 rounded-lg p-4">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300">Bronze</span>
-                      <span className="text-yellow-400 font-bold">3%</span>
+                      <span className="text-gray-300">Commission</span>
+                      <span className="text-yellow-400 font-bold">2× Réduction</span>
                     </div>
-                    <p className="text-gray-400 text-sm">50 tickets vendus</p>
-                  </div>
-                  <div className="bg-gray-900/50 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300">Argent</span>
-                      <span className="text-yellow-400 font-bold">5%</span>
-                    </div>
-                    <p className="text-gray-400 text-sm">100 tickets vendus</p>
-                  </div>
-                  <div className="bg-gray-900/50 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300">Or</span>
-                      <span className="text-yellow-400 font-bold">10%</span>
-                    </div>
-                    <p className="text-gray-400 text-sm">200 tickets vendus</p>
-                  </div>
-                  <div className="bg-gray-900/50 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-300">Platine</span>
-                      <span className="text-yellow-400 font-bold">15%</span>
-                    </div>
-                    <p className="text-gray-400 text-sm">500 tickets vendus</p>
+                    <p className="text-gray-400 text-sm">Exemple : 15% de réduction = 30 FCFA de commission</p>
                   </div>
                 </div>
               </motion.div>
@@ -497,7 +476,7 @@ function HomePage() {
                   <div>
                     <p className="font-semibold mb-2">Pour vous :</p>
                     <ul className="space-y-1">
-                      <li>• Commissions selon vos ventes</li>
+                      <li>• Vous gagnez 2× la réduction appliquée sur chaque ticket vendu avec votre coupon</li>
                       <li>• Suivi en temps réel</li>
                       <li>• Paiements automatiques</li>
                     </ul>

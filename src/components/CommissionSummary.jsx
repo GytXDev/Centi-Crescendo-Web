@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { DollarSign, TrendingUp, Users, Trophy, Phone, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { getCommissionSummaryForTombola, updateAllCommissionsForTombola } from '@/lib/supabaseServices';
+import { getCommissionSummaryForTombola } from '@/lib/supabaseServices';
 
 function CommissionSummary({ tombolaId, tombolaTitle }) {
     const [summary, setSummary] = useState(null);
@@ -44,41 +44,6 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
         }
     };
 
-    const handleUpdateCommissions = async () => {
-        try {
-            setUpdating(true);
-            const { data, error } = await updateAllCommissionsForTombola(tombolaId);
-
-            if (error) {
-                console.error('Erreur lors de la mise à jour des commissions:', error);
-                toast({
-                    title: "Erreur",
-                    description: "Impossible de mettre à jour les commissions.",
-                    variant: "destructive"
-                });
-                return;
-            }
-
-            toast({
-                title: "Succès",
-                description: `${data} commissions mises à jour avec succès.`,
-                variant: "default"
-            });
-
-            // Recharger les données
-            await loadCommissionSummary();
-        } catch (error) {
-            console.error('Erreur lors de la mise à jour:', error);
-            toast({
-                title: "Erreur",
-                description: "Une erreur inattendue s'est produite.",
-                variant: "destructive"
-            });
-        } finally {
-            setUpdating(false);
-        }
-    };
-
     if (loading) {
         return (
             <div className="bg-[#1C1C21]/50 border border-gray-800 rounded-2xl p-6">
@@ -114,13 +79,6 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
                     <DollarSign className="w-6 h-6 mr-3 text-yellow-400" />
                     Récapitulatif des Commissions - {tombolaTitle}
                 </h3>
-                <Button
-                    onClick={handleUpdateCommissions}
-                    disabled={updating}
-                    className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold"
-                >
-                    {updating ? 'Mise à jour...' : 'Actualiser les Commissions'}
-                </Button>
             </div>
 
             {/* Statistiques globales */}

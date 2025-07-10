@@ -19,7 +19,10 @@ import {
   updateAppConfigById,
   performDraw,
   getAllCoupons,
-  updateCouponDiscount
+  updateCouponDiscount,
+  updateCouponCode,
+  updateCouponParrainContacte,
+  deleteCoupon
 } from '@/lib/supabaseServices';
 import { getPublicUrl } from '@/lib/fileUploadService';
 import VideoUpload from '@/components/VideoUpload';
@@ -46,6 +49,9 @@ function AdminPage() {
   const [allCoupons, setAllCoupons] = useState([]);
   const [editingDiscount, setEditingDiscount] = useState({});
   const [updatingId, setUpdatingId] = useState(null);
+  const [editingCode, setEditingCode] = useState({});
+  const [updatingCodeId, setUpdatingCodeId] = useState(null);
+  const [confirmDeleteCoupon, setConfirmDeleteCoupon] = useState({ open: false, couponId: null });
 
   const { toast } = useToast();
 
@@ -412,6 +418,40 @@ function AdminPage() {
     }
   };
 
+  const handleUpdateCode = async (couponId) => {
+    const newCode = editingCode[couponId];
+    if (!newCode || newCode.trim() === "") {
+      toast({
+        title: "Erreur",
+        description: "Le code ne peut pas être vide.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setUpdatingCodeId(couponId);
+    const { error } = await updateCouponCode(couponId, newCode.trim());
+    setUpdatingCodeId(null);
+    if (!error) {
+      toast({
+        title: "Succès",
+        description: "Le code du coupon a été mis à jour.",
+        variant: "success"
+      });
+      setEditingCode(prev => {
+        const updated = { ...prev };
+        delete updated[couponId];
+        return updated;
+      });
+      loadAllCoupons();
+    } else {
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le code.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Afficher la page de connexion si non authentifié
   if (!isAuthenticated) {
     return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
@@ -615,38 +655,91 @@ function AdminPage() {
                     <th className="px-4 py-2">Téléphone</th>
                     <th className="px-4 py-2">Tombola</th>
                     <th className="px-4 py-2">Réduction (%)</th>
+                    <th className="px-4 py-2">Parrain contacté</th>
                     <th className="px-4 py-2">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {allCoupons.map(coupon => (
-                    <tr key={coupon.id} className="border-b border-gray-800">
-                      <td className="px-4 py-2 font-mono text-yellow-400">{coupon.code}</td>
-                      <td className="px-4 py-2">{coupon.creator_name}</td>
-                      <td className="px-4 py-2">{coupon.creator_phone}</td>
-                      <td className="px-4 py-2">{coupon.tombolas?.title}</td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={editingDiscount[coupon.id] !== undefined ? editingDiscount[coupon.id] : coupon.discount_percentage}
-                          onChange={e => handleDiscountInput(coupon.id, e.target.value)}
-                          className="w-16 px-2 py-1 rounded bg-gray-800 text-yellow-400 font-bold border border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                          disabled={updatingId === coupon.id}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <button
-                          onClick={() => handleUpdateDiscount(coupon.id)}
-                          disabled={updatingId === coupon.id}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded font-bold"
-                        >
-                          {updatingId === coupon.id ? '...' : 'Mettre à jour'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {allCoupons
+                    .slice() // pour ne pas muter l'original
+                    .sort((a, b) => (a.parrain_contacte === b.parrain_contacte ? 0 : a.parrain_contacte ? 1 : -1))
+                    .map(coupon => (
+                      <tr key={coupon.id} className="border-b border-gray-800">
+                        <td className="px-4 py-2 font-mono text-yellow-400">
+                          {editingCode[coupon.id] !== undefined ? (
+                            <input
+                              type="text"
+                              value={editingCode[coupon.id] || coupon.code}
+                              onChange={e => setEditingCode(prev => ({ ...prev, [coupon.id]: e.target.value }))}
+                              className="w-24 px-2 py-1 rounded bg-gray-800 text-yellow-400 font-bold border border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                              disabled={updatingCodeId === coupon.id}
+                            />
+                          ) : (
+                            coupon.code
+                          )}
+                        </td>
+                        <td className="px-4 py-2">{coupon.creator_name}</td>
+                        <td className="px-4 py-2">{coupon.creator_phone}</td>
+                        <td className="px-4 py-2">{coupon.tombolas?.title}</td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={editingDiscount[coupon.id] !== undefined ? editingDiscount[coupon.id] : coupon.discount_percentage}
+                            onChange={e => handleDiscountInput(coupon.id, e.target.value)}
+                            className="w-16 px-2 py-1 rounded bg-gray-800 text-yellow-400 font-bold border border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                            disabled={updatingId === coupon.id}
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={!!coupon.parrain_contacte}
+                            onChange={async (e) => {
+                              await updateCouponParrainContacte(coupon.id, e.target.checked);
+                              loadAllCoupons();
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex gap-2">
+                            {editingCode[coupon.id] !== undefined ? (
+                              <button
+                                onClick={() => handleUpdateCode(coupon.id)}
+                                disabled={updatingCodeId === coupon.id}
+                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded font-bold"
+                              >
+                                {updatingCodeId === coupon.id ? '...' : 'Mettre à jour'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setEditingCode(prev => ({ ...prev, [coupon.id]: coupon.code }))}
+                                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded font-bold"
+                              >
+                                <Edit className="w-4 h-4 mr-1" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleUpdateDiscount(coupon.id)}
+                              disabled={updatingId === coupon.id}
+                              className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded font-bold"
+                            >
+                              {updatingId === coupon.id ? '...' : 'Mettre à jour'}
+                            </button>
+                            {coupon.total_uses === 0 && (
+                              <button
+                                onClick={() => setConfirmDeleteCoupon({ open: true, couponId: coupon.id })}
+                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded font-bold"
+                                title="Supprimer ce coupon (aucun parrainage)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -692,6 +785,26 @@ function AdminPage() {
           isOpen={isWinnerManagerOpen}
           onClose={() => setIsWinnerManagerOpen(false)}
           tombola={selectedTombola}
+        />
+
+        <ConfirmModal
+          isOpen={confirmDeleteCoupon.open}
+          onClose={() => setConfirmDeleteCoupon({ open: false, couponId: null })}
+          onConfirm={async () => {
+            await deleteCoupon(confirmDeleteCoupon.couponId);
+            setConfirmDeleteCoupon({ open: false, couponId: null });
+            loadAllCoupons();
+            toast({
+              title: "Coupon supprimé",
+              description: "Le coupon a bien été supprimé.",
+              variant: "success"
+            });
+          }}
+          title="Confirmer la suppression"
+          message="Êtes-vous sûr de vouloir supprimer ce coupon ? Cette action est irréversible."
+          confirmLabel="Supprimer"
+          confirmColor="bg-red-500 hover:bg-red-600"
+          icon={<Trash2 />}
         />
       </div>
     </>

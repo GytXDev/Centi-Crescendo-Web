@@ -862,6 +862,47 @@ export async function updateCouponDiscount(couponId, newDiscount) {
     }
 }
 
+/**
+ * Met à jour le code d'un coupon
+ */
+export async function updateCouponCode(couponId, newCode) {
+    try {
+        const { data, error } = await supabase
+            .from('coupons')
+            .update({ code: newCode })
+            .eq('id', couponId)
+            .select()
+            .single();
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour du code coupon:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Met à jour le statut de contact du parrain pour un coupon
+ */
+export async function updateCouponParrainContacte(couponId, parrainContacte) {
+    const { data, error } = await supabase
+        .from('coupons')
+        .update({ parrain_contacte: parrainContacte })
+        .eq('id', couponId);
+    return { data, error };
+}
+
+/**
+ * Supprime un coupon par son id
+ */
+export async function deleteCoupon(couponId) {
+    const { data, error } = await supabase
+        .from('coupons')
+        .delete()
+        .eq('id', couponId);
+    return { data, error };
+}
+
 // ===== SERVICES POUR LES COMMISSIONS =====
 
 /**
@@ -972,7 +1013,7 @@ export async function getAllCoupons() {
     try {
         const { data, error } = await supabase
             .from('coupons')
-            .select(`*, tombolas (title), creator_name, creator_phone`)
+            .select(`*, tombolas (title), creator_name, creator_phone, parrain_contacte`)
             .order('created_at', { ascending: false });
         if (error) throw error;
         return { data, error: null };

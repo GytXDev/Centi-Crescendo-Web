@@ -47,30 +47,86 @@ function CouponDashboard({ userPhone }) {
 
     const copyToClipboard = async (code) => {
         try {
-            await navigator.clipboard.writeText(code);
+            const coupon = coupons.find(c => c.code === code);
+            if (!coupon) {
+                toast({
+                    title: "Erreur",
+                    description: "Coupon introuvable.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            const shareMessage = `🎉 Participe à la ${coupon?.tombolas?.title || 'tombola'} !
+Utilise mon code ${code} pour -${coupon?.discount_percentage || 10}% de réduction sur ton ticket 🎟️
+👉 https://www.cresapp.site
+🍀 Bonne chance !`;
+
+            // Essayer d'abord l'API Clipboard moderne
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(shareMessage);
+            } else {
+                // Fallback pour les navigateurs plus anciens
+                const textArea = document.createElement('textarea');
+                textArea.value = shareMessage;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+
+                if (!successful) {
+                    throw new Error('execCommand copy failed');
+                }
+            }
+
             setCopiedCode(code);
             toast({
                 title: "Copié !",
-                description: "Le code coupon a été copié dans le presse-papiers.",
+                description: "Le message de partage a été copié dans le presse-papiers.",
                 variant: "default"
             });
             setTimeout(() => setCopiedCode(null), 2000);
         } catch (error) {
+            console.error('Erreur lors de la copie:', error);
+
+            // Fallback final : afficher le message pour copie manuelle
+            const coupon = coupons.find(c => c.code === code);
+            const shareMessage = `🎉 Participe à la ${coupon?.tombolas?.title || 'tombola'} !
+Utilise mon code ${code} pour -${coupon?.discount_percentage || 10}% de réduction sur ton ticket 🎟️
+👉 https://www.cresapp.site
+🍀 Bonne chance !`;
+
+            // Créer un modal ou une alerte avec le message
+            if (window.confirm('Impossible de copier automatiquement. Voulez-vous voir le message à copier manuellement ?')) {
+                alert(`Copiez ce message :\n\n${shareMessage}`);
+            }
+
             toast({
-                title: "Erreur",
-                description: "Impossible de copier le code.",
+                title: "Erreur de copie",
+                description: "Impossible de copier automatiquement. Vérifiez les permissions du navigateur.",
                 variant: "destructive"
             });
         }
     };
 
     const shareCoupon = async (code) => {
+        const coupon = coupons.find(c => c.code === code);
+        const shareMessage = `🎉 Participe à la ${coupon?.tombolas?.title || 'tombola'} !
+Utilise mon code ${code} pour -${coupon?.discount_percentage || 10}% de réduction sur ton ticket 🎟️
+👉 https://www.cresapp.site
+🍀 Bonne chance !`;
+
         if (navigator.share) {
             try {
                 await navigator.share({
                     title: 'Mon coupon de réduction',
-                    text: `Utilisez mon code coupon ${code} pour obtenir 10% de réduction sur votre ticket de tombola !`,
-                    url: window.location.href
+                    text: shareMessage,
+                    url: 'https://www.cresapp.site'
                 });
             } catch (error) {
                 copyToClipboard(code);

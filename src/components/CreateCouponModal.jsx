@@ -136,18 +136,23 @@ function CreateCouponModal({ isOpen, onClose, tombola }) {
 
     const copyToClipboard = async () => {
         try {
-            await navigator.clipboard.writeText(generatedCoupon.code);
+            const shareMessage = `🎉 Participe à la ${tombola?.title || 'tombola'} !
+Utilise mon code ${generatedCoupon.code} pour -${generatedCoupon.discount_percentage}% de réduction sur ton ticket 🎟️
+👉 https://www.cresapp.site
+🍀 Bonne chance !`;
+
+            await navigator.clipboard.writeText(shareMessage);
             setCopied(true);
             toast({
                 title: "Copié !",
-                description: "Le code coupon a été copié dans le presse-papiers.",
+                description: "Le message de partage a été copié dans le presse-papiers.",
                 variant: "default"
             });
             setTimeout(() => setCopied(false), 2000);
         } catch (error) {
             toast({
                 title: "Erreur",
-                description: "Impossible de copier le code.",
+                description: "Impossible de copier le message.",
                 variant: "destructive"
             });
         }

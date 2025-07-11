@@ -178,7 +178,7 @@ Utilise mon code ${generatedCoupon.code} pour -${generatedCoupon.discount_percen
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-[#1C1C21] border border-gray-800 rounded-2xl p-6 w-full max-w-md"
+                    className="bg-[#1C1C21] border border-gray-800 rounded-2xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md"
                 >
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold text-white">

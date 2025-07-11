@@ -192,7 +192,7 @@ function CreateTombolaModal({ isOpen, onClose, onSubmit, tombola }) {
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative bg-[#1C1C21] border border-gray-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="relative bg-[#1C1C21] border border-gray-800 rounded-2xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md lg:max-w-2xl max-h-[90vh] overflow-y-auto"
         >
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-white">

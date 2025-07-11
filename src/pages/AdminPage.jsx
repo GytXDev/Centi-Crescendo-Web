@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
-import { PlusCircle, Edit, Trash2, Users, BarChart, DollarSign, Video, Trophy, LogOut, Gift } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Users, BarChart, DollarSign, Video, Trophy, LogOut, Gift, X, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import CreateTombolaModal from '@/components/CreateTombolaModal';
@@ -22,12 +22,18 @@ import {
   updateCouponDiscount,
   updateCouponCode,
   updateCouponParrainContacte,
-  deleteCoupon
+  deleteCoupon,
+  archiveCoupon,
+  createParticipant,
+  validateCoupon,
+  useCoupon
 } from '@/lib/supabaseServices';
 import { getPublicUrl } from '@/lib/fileUploadService';
 import VideoUpload from '@/components/VideoUpload';
 import ConfirmModal from '@/components/ConfirmModal';
 import WinnerManagerModal from '@/components/WinnerManagerModal';
+import { generateTicketPDF } from '@/utils/pdfGenerator';
+import { supabase } from '@/lib/customSupabaseClient';
 
 function AdminPage() {
   const [tombolas, setTombolas] = useState([]);
@@ -52,6 +58,23 @@ function AdminPage() {
   const [editingCode, setEditingCode] = useState({});
   const [updatingCodeId, setUpdatingCodeId] = useState(null);
   const [confirmDeleteCoupon, setConfirmDeleteCoupon] = useState({ open: false, couponId: null });
+  const [isManualTicketModalOpen, setIsManualTicketModalOpen] = useState(false);
+  const [manualTicketForm, setManualTicketForm] = useState({
+    name: '',
+    phone: '',
+    airtelMoneyNumber: '',
+    couponCode: '',
+    tombolaId: ''
+  });
+  const [manualTicketLoading, setManualTicketLoading] = useState(false);
+  const [manualTicketError, setManualTicketError] = useState('');
+  const [manualTicketSuccess, setManualTicketSuccess] = useState('');
+  const [manualTicketCreated, setManualTicketCreated] = useState(null);
+  const [searchMode, setSearchMode] = useState('create'); // 'create' ou 'search'
+  const [searchParticipantId, setSearchParticipantId] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [foundParticipant, setFoundParticipant] = useState(null);
 
   const { toast } = useToast();
 
@@ -452,6 +475,146 @@ function AdminPage() {
     }
   };
 
+  const handleManualTicketInput = (e) => {
+    const { name, value } = e.target;
+    setManualTicketForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const generateParticipantPDF = (participant) => {
+    const couponUse = participant.coupon_uses?.[0];
+    const ticketData = {
+      name: participant.name,
+      phone: participant.phone,
+      ticketNumber: participant.ticket_number,
+      airtelMoneyNumber: participant.airtel_money_number,
+      tombolaTitle: participant.tombolas?.title || 'Tombola',
+      originalPrice: participant.tombolas?.ticket_price || 0,
+      finalPrice: participant.tombolas?.ticket_price || 0,
+      discountAmount: 0,
+      drawDate: participant.tombolas?.draw_date || new Date().toISOString(),
+      couponCode: couponUse?.coupons?.code || null
+    };
+
+    // Si un coupon a été utilisé, calculer les prix corrects
+    if (couponUse) {
+      ticketData.discountAmount = couponUse.discount_amount || 0;
+      ticketData.finalPrice = ticketData.originalPrice - ticketData.discountAmount;
+    }
+
+    generateTicketPDF(ticketData);
+  };
+
+  const handleSearchParticipant = async () => {
+    if (!searchParticipantId.trim()) {
+      setSearchError('Veuillez entrer un ID de participant');
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError('');
+    setFoundParticipant(null);
+
+    try {
+      // Rechercher le participant par ID
+      const { data: participant, error } = await supabase
+        .from('participants')
+        .select(`
+          *,
+          tombolas (
+            id,
+            title,
+            ticket_price,
+            draw_date
+          ),
+          coupon_uses (
+            id,
+            discount_amount,
+            coupons (
+              code
+            )
+          )
+        `)
+        .eq('id', searchParticipantId.trim())
+        .single();
+
+      if (error || !participant) {
+        setSearchError('Participant non trouvé avec cet ID');
+        return;
+      }
+
+      setFoundParticipant(participant);
+    } catch (err) {
+      setSearchError('Erreur lors de la recherche : ' + (err.message || err));
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleManualTicketSubmit = async (e) => {
+    e.preventDefault();
+    setManualTicketError('');
+    setManualTicketSuccess('');
+    if (!manualTicketForm.name.trim() || !manualTicketForm.phone.trim() || !manualTicketForm.airtelMoneyNumber.trim() || !manualTicketForm.tombolaId) {
+      setManualTicketError('Tous les champs sont obligatoires sauf le code coupon.');
+      return;
+    }
+    setManualTicketLoading(true);
+    try {
+      let couponValidation = null;
+      let discountAmount = 0;
+      let couponId = null;
+      if (manualTicketForm.couponCode.trim()) {
+        const result = await validateCoupon(
+          manualTicketForm.couponCode.trim().toUpperCase(),
+          manualTicketForm.tombolaId,
+          manualTicketForm.phone
+        );
+        if (!result.isValid) {
+          setManualTicketError('Coupon invalide : ' + result.error);
+          setManualTicketLoading(false);
+          return;
+        }
+        couponValidation = result;
+        discountAmount = result.discountAmount;
+        couponId = result.coupon.id;
+      }
+      // Créer le participant
+      const { data: participant, error: participantError } = await createParticipant({
+        name: manualTicketForm.name,
+        phone: manualTicketForm.phone,
+        tombolaId: manualTicketForm.tombolaId,
+        airtelMoneyNumber: manualTicketForm.airtelMoneyNumber
+      }, 'confirmed');
+      if (participantError || !participant) {
+        setManualTicketError("Erreur lors de la création du ticket : " + (participantError?.message || ''));
+        setManualTicketLoading(false);
+        return;
+      }
+      // Enregistrer l'utilisation du coupon si applicable
+      if (couponValidation && couponId) {
+        await useCoupon(
+          couponId,
+          participant.id,
+          manualTicketForm.tombolaId,
+          tombolas.find(t => t.id === manualTicketForm.tombolaId)?.ticket_price || 0,
+          discountAmount,
+          (tombolas.find(t => t.id === manualTicketForm.tombolaId)?.ticket_price || 0) - discountAmount
+        );
+      }
+      setManualTicketSuccess('Ticket créé avec succès !');
+      setManualTicketCreated({
+        ...participant,
+        coupon_validation: couponValidation
+      });
+      setManualTicketForm({ name: '', phone: '', airtelMoneyNumber: '', couponCode: '', tombolaId: '' });
+      loadAllCoupons();
+    } catch (err) {
+      setManualTicketError('Erreur inattendue : ' + (err.message || err));
+    } finally {
+      setManualTicketLoading(false);
+    }
+  };
+
   // Afficher la page de connexion si non authentifié
   if (!isAuthenticated) {
     return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
@@ -499,6 +662,15 @@ function AdminPage() {
                 >
                   <PlusCircle className="w-5 h-5 mr-2" />
                   Nouvelle Tombola
+                </Button>
+
+                {/* Nouveau bouton pour accéder au suivi des participants */}
+                <Button
+                  onClick={() => window.location.href = '/participants'}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold w-full sm:w-auto"
+                >
+                  <Users className="w-5 h-5 mr-2" />
+                  Suivi Participants
                 </Button>
 
                 <Button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white font-bold">
@@ -806,6 +978,263 @@ function AdminPage() {
           confirmColor="bg-red-500 hover:bg-red-600"
           icon={<Trash2 />}
         />
+
+        {/* Bouton pour ouvrir la modale d'ajout manuel de ticket */}
+        <Button
+          className="mb-4 bg-green-600 hover:bg-green-700 text-white font-bold"
+          onClick={() => setIsManualTicketModalOpen(true)}
+        >
+          Créer/Rechercher un ticket
+        </Button>
+        {/* Modale d'ajout manuel de ticket */}
+        {isManualTicketModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-[#1C1C21] border border-gray-800 rounded-2xl p-4 sm:p-6 lg:p-8 w-full max-w-md lg:max-w-lg xl:max-w-xl relative max-h-[90vh] overflow-y-auto">
+              <button
+                onClick={() => {
+                  setIsManualTicketModalOpen(false);
+                  setManualTicketCreated(null);
+                  setFoundParticipant(null);
+                  setSearchMode('create');
+                  setSearchParticipantId('');
+                  setSearchError('');
+                  setManualTicketForm({ name: '', phone: '', airtelMoneyNumber: '', couponCode: '', tombolaId: '' });
+                }}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              {!manualTicketCreated && !foundParticipant ? (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-6">Créer/Rechercher un ticket</h2>
+
+                  {/* Onglets pour basculer entre création et recherche */}
+                  <div className="flex mb-6 bg-gray-800 rounded-lg p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSearchMode('create')}
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${searchMode === 'create'
+                        ? 'bg-green-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                      Créer un ticket
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchMode('search')}
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${searchMode === 'search'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                      Rechercher un ticket
+                    </button>
+                  </div>
+
+                  {searchMode === 'create' ? (
+                    <form onSubmit={handleManualTicketSubmit} className="space-y-4">
+                      <div>
+                        <label className="text-white block mb-1">Nom complet</label>
+                        <input type="text" name="name" value={manualTicketForm.name} onChange={handleManualTicketInput} className="w-full px-3 py-2 rounded bg-gray-900 border border-gray-700 text-white" required />
+                      </div>
+                      <div>
+                        <label className="text-white block mb-1">Téléphone</label>
+                        <input type="tel" name="phone" value={manualTicketForm.phone} onChange={handleManualTicketInput} className="w-full px-3 py-2 rounded bg-gray-900 border border-gray-700 text-white" required />
+                      </div>
+                      <div>
+                        <label className="text-white block mb-1">Numéro Airtel Money</label>
+                        <input type="tel" name="airtelMoneyNumber" value={manualTicketForm.airtelMoneyNumber} onChange={handleManualTicketInput} className="w-full px-3 py-2 rounded bg-gray-900 border border-gray-700 text-white" required />
+                      </div>
+                      <div>
+                        <label className="text-white block mb-1">Code coupon (optionnel)</label>
+                        <input type="text" name="couponCode" value={manualTicketForm.couponCode} onChange={handleManualTicketInput} className="w-full px-3 py-2 rounded bg-gray-900 border border-gray-700 text-white" />
+                      </div>
+                      <div>
+                        <label className="text-white block mb-1">Tombola</label>
+                        <select name="tombolaId" value={manualTicketForm.tombolaId} onChange={handleManualTicketInput} className="w-full px-3 py-2 rounded bg-gray-900 border border-gray-700 text-white" required>
+                          <option value="">Sélectionner une tombola</option>
+                          {tombolas.map(t => (
+                            <option key={t.id} value={t.id}>{t.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {manualTicketError && <div className="text-red-400 text-sm">{manualTicketError}</div>}
+                      {manualTicketSuccess && <div className="text-green-400 text-sm">{manualTicketSuccess}</div>}
+                      <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold" disabled={manualTicketLoading}>
+                        {manualTicketLoading ? 'Création...' : 'Créer le ticket'}
+                      </Button>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-white block mb-1">ID du participant</label>
+                        <input
+                          type="text"
+                          value={searchParticipantId}
+                          onChange={(e) => setSearchParticipantId(e.target.value)}
+                          placeholder="Entrez l'ID du participant"
+                          className="w-full px-3 py-2 rounded bg-gray-900 border border-gray-700 text-white"
+                        />
+                      </div>
+                      {searchError && <div className="text-red-400 text-sm">{searchError}</div>}
+                      <Button
+                        onClick={handleSearchParticipant}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                        disabled={searchLoading}
+                      >
+                        {searchLoading ? 'Recherche...' : 'Rechercher le participant'}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : foundParticipant ? (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-6">Participant trouvé !</h2>
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <CheckCircle className="text-blue-400" size={24} />
+                      <div>
+                        <h3 className="text-blue-400 font-bold">Participant trouvé</h3>
+                        <p className="text-blue-200 text-sm">Le participant a été trouvé dans la base de données</p>
+                      </div>
+                    </div>
+                    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <p className="text-gray-400">ID</p>
+                          <p className="text-white font-semibold">{foundParticipant.id}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Nom</p>
+                          <p className="text-white font-semibold">{foundParticipant.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Téléphone</p>
+                          <p className="text-white font-semibold">{foundParticipant.phone}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Numéro de ticket</p>
+                          <p className="text-yellow-400 font-mono font-bold text-lg">{foundParticipant.ticket_number}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Tombola</p>
+                          <p className="text-white font-semibold">{foundParticipant.tombolas?.title}</p>
+                        </div>
+                        {foundParticipant.coupon_uses?.[0] && (
+                          <div>
+                            <p className="text-gray-400">Coupon utilisé</p>
+                            <p className="text-green-400 font-semibold">{foundParticipant.coupon_uses[0].coupons?.code}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => generateParticipantPDF(foundParticipant)}
+                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                    >
+                      Télécharger le PDF
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setFoundParticipant(null);
+                        setSearchParticipantId('');
+                        setSearchError('');
+                      }}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold"
+                    >
+                      Nouvelle recherche
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-white mb-6">Ticket créé avec succès !</h2>
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-6">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <CheckCircle className="text-green-400" size={24} />
+                      <div>
+                        <h3 className="text-green-400 font-bold">Ticket généré</h3>
+                        <p className="text-green-200 text-sm">Le ticket a été créé avec succès</p>
+                      </div>
+                    </div>
+                    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <p className="text-gray-400">Nom</p>
+                          <p className="text-white font-semibold">{manualTicketCreated.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Téléphone</p>
+                          <p className="text-white font-semibold">{manualTicketCreated.phone}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Numéro de ticket</p>
+                          <p className="text-yellow-400 font-mono font-bold text-lg">{manualTicketCreated.ticket_number}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400">Tombola</p>
+                          <p className="text-white font-semibold">{tombolas.find(t => t.id === manualTicketForm.tombolaId)?.title}</p>
+                        </div>
+                        {manualTicketForm.couponCode && (
+                          <div>
+                            <p className="text-gray-400">Coupon utilisé</p>
+                            <p className="text-green-400 font-semibold">{manualTicketForm.couponCode.toUpperCase()}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => {
+                        const selectedTombola = tombolas.find(t => t.id === manualTicketForm.tombolaId);
+                        const ticketData = {
+                          name: manualTicketCreated.name,
+                          phone: manualTicketCreated.phone,
+                          ticketNumber: manualTicketCreated.ticket_number,
+                          airtelMoneyNumber: manualTicketCreated.airtel_money_number,
+                          tombolaTitle: selectedTombola?.title || 'Tombola',
+                          originalPrice: selectedTombola?.ticket_price || 0,
+                          finalPrice: selectedTombola?.ticket_price || 0,
+                          discountAmount: 0,
+                          drawDate: selectedTombola?.draw_date || new Date().toISOString(),
+                          couponCode: manualTicketForm.couponCode || null
+                        };
+
+                        // Si un coupon a été utilisé, calculer les prix corrects
+                        if (manualTicketForm.couponCode && manualTicketCreated.coupon_validation) {
+                          ticketData.discountAmount = manualTicketCreated.coupon_validation.discountAmount;
+                          ticketData.finalPrice = ticketData.originalPrice - ticketData.discountAmount;
+                        } else {
+                          // Sans coupon, le prix final est le même que le prix original
+                          ticketData.finalPrice = ticketData.originalPrice;
+                        }
+
+                        generateTicketPDF(ticketData);
+                      }}
+                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
+                    >
+                      Télécharger le PDF
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setIsManualTicketModalOpen(false);
+                        setManualTicketCreated(null);
+                        setManualTicketForm({ name: '', phone: '', airtelMoneyNumber: '', couponCode: '', tombolaId: '' });
+                      }}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold"
+                    >
+                      Fermer
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

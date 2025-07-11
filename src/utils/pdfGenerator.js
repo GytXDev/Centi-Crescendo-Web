@@ -50,8 +50,8 @@ export const generateTicketPDF = (ticketData) => {
     ['Nom complet:', ticketData.name],
     ['Numéro de téléphone:', ticketData.phone],
     ['Numéro de ticket:', ticketData.ticketNumber],
-    ['Prix original:', `${ticketData.originalPrice || ticketData.price} FCFA`],
-    ['Prix payé:', `${ticketData.price} FCFA`],
+    ['Prix original:', `${ticketData.originalPrice} FCFA`],
+    ['Prix payé:', `${ticketData.finalPrice} FCFA`],
     ['Date du tirage:', new Date(ticketData.drawDate).toLocaleDateString('fr-FR')],
     ['Tombola:', ticketData.tombolaTitle]
   ];

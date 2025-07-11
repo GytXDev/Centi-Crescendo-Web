@@ -54,8 +54,8 @@ function WinnerManagerModal({ isOpen, onClose, tombola }) {
     if (!isOpen || !tombola) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-[#1C1C21] rounded-2xl p-8 w-full max-w-lg relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+            <div className="bg-[#1C1C21] rounded-2xl p-4 sm:p-6 lg:p-8 w-full max-w-sm sm:max-w-md lg:max-w-lg relative max-h-[90vh] overflow-y-auto">
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 text-gray-400 hover:text-white"
@@ -72,9 +72,9 @@ function WinnerManagerModal({ isOpen, onClose, tombola }) {
                 ) : winners.length === 0 ? (
                     <div className="text-center text-gray-400">Aucun gagnant pour cette tombola.</div>
                 ) : (
-                    <div className="space-y-6 max-h-96 overflow-y-auto">
+                    <div className="space-y-4 sm:space-y-6 max-h-96 overflow-y-auto">
                         {winners.map((winner) => (
-                            <div key={winner.id} className="flex items-center gap-4 bg-[#23232A] rounded-xl p-4">
+                            <div key={winner.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 bg-[#23232A] rounded-xl p-3 sm:p-4">
                                 <img
                                     src={winner.photo_url || 'https://images.unsplash.com/photo-1673381572188-9c26638c73fd'}
                                     alt={winner.participants?.name || 'Gagnant'}
@@ -84,6 +84,11 @@ function WinnerManagerModal({ isOpen, onClose, tombola }) {
                                     <div className="font-bold text-white text-lg">{winner.participants?.name || 'Anonyme'}</div>
                                     <div className="text-gray-400 text-sm">Ticket: {winner.participants?.ticket_number || 'N/A'}</div>
                                     <div className="text-green-400 text-sm font-medium">{winner.prize_amount} CFA</div>
+                                    {winner.bonus_commission && (
+                                        <div className="text-yellow-400 text-sm font-semibold mt-1">
+                                            🎁 Bonus Parrainage : +{parseInt(winner.bonus_commission).toLocaleString()} CFA
+                                        </div>
+                                    )}
                                 </div>
                                 <label className="flex flex-col items-center cursor-pointer">
                                     <input

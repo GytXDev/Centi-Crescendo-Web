@@ -20,7 +20,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className="relative bg-[#1C1C21] border border-gray-800 rounded-2xl p-6 w-full max-w-md mx-auto z-10"
+                    className="relative bg-[#1C1C21] border border-gray-800 rounded-2xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md mx-auto z-10"
                 >
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -37,11 +37,11 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel
                         </Button>
                     </div>
                     <div className="text-gray-300 mb-6 whitespace-pre-line">{message}</div>
-                    <div className="flex justify-end gap-3">
-                        <Button onClick={onClose} className="bg-gray-700 hover:bg-gray-600 text-white">
+                    <div className="flex flex-col sm:flex-row justify-end gap-3">
+                        <Button onClick={onClose} className="bg-gray-700 hover:bg-gray-600 text-white order-2 sm:order-1">
                             {cancelLabel}
                         </Button>
-                        <Button onClick={onConfirm} className={`${confirmColor} text-white font-bold`}>
+                        <Button onClick={onConfirm} className={`${confirmColor} text-white font-bold order-1 sm:order-2`}>
                             {confirmLabel}
                         </Button>
                     </div>

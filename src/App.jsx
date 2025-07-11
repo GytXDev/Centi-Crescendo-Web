@@ -6,6 +6,7 @@ import HomePage from '@/pages/HomePage';
 import AdminPage from '@/pages/AdminPage';
 import HistoryPage from '@/pages/HistoryPage';
 import CouponDashboardPage from '@/pages/CouponDashboardPage';
+import ParticipantsPage from '@/pages/ParticipantsPage';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/historique" element={<HistoryPage />} />
           <Route path="/coupons" element={<CouponDashboardPage />} />
+          <Route path="/participants" element={<ParticipantsPage />} />
         </Routes>
         <Toaster />
       </div>

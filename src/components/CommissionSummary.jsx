@@ -175,6 +175,11 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
                                                     {sponsor.total_uses} tickets
                                                 </span>
                                             </div>
+                                            {sponsor.bonus_commission > 0 && (
+                                                <div className="text-yellow-400 text-xs font-semibold mt-1">
+                                                    🎁 Bonus Parrainage : +{parseInt(sponsor.bonus_commission).toLocaleString()} CFA
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="text-right">

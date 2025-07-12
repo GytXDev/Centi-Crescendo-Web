@@ -7,6 +7,7 @@ import AdminPage from '@/pages/AdminPage';
 import HistoryPage from '@/pages/HistoryPage';
 import CouponDashboardPage from '@/pages/CouponDashboardPage';
 import ParticipantsPage from '@/pages/ParticipantsPage';
+import TombolaRulesPage from '@/pages/TombolaRulesPage';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/historique" element={<HistoryPage />} />
           <Route path="/coupons" element={<CouponDashboardPage />} />
           <Route path="/participants" element={<ParticipantsPage />} />
+          <Route path="/tombola-reglement" element={<TombolaRulesPage />} />
         </Routes>
         <Toaster />
       </div>

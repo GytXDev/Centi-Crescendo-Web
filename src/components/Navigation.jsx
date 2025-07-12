@@ -11,7 +11,8 @@ function Navigation() {
   const navItems = [
     { path: '/', label: 'Accueil', icon: Home },
     { path: '/historique', label: 'Historique', icon: History },
-    { path: '/coupons', label: 'Mes Coupons', icon: Tag }
+    { path: '/coupons', label: 'Mes Coupons', icon: Tag },
+    { path: '/tombola-reglement', label: '🎟️ Règlement Tombolas', icon: Tag },
   ];
 
   const isActive = (path) => location.pathname === path;

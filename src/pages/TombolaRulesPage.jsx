@@ -86,6 +86,23 @@ const TombolaRulesPage = () => {
                     </div>
                 </section>
 
+                {/* Fonctionnement des coupons */}
+                <section className="mb-8">
+                    <h2 className="text-xl font-semibold mb-2">🔹 Fonctionnement du système de coupons</h2>
+                    <ul className="list-disc pl-6 mb-2">
+                        <li>Chaque utilisateur peut obtenir un coupon de réduction en parrainant ou via des campagnes spéciales.</li>
+                        <li>Le coupon donne droit à une réduction immédiate sur le prix du ticket lors de l'achat.</li>
+                        <li>Le code coupon est à renseigner lors de la participation à une tombola.</li>
+                        <li>Le parrain (créateur du coupon) reçoit une commission sur chaque ticket acheté avec son code.</li>
+                        <li>Plus vous partagez votre code, plus vous pouvez cumuler des commissions !</li>
+                        <li>Les coupons sont nominatifs et traçables pour garantir la transparence.</li>
+                    </ul>
+                    <div className="bg-yellow-100/60 border-l-4 border-yellow-400 p-4 rounded text-yellow-900 text-sm">
+                        Exemple :<br />
+                        <span className="font-semibold">Vous partagez votre code coupon à un ami. Il achète un ticket avec ce code&nbsp;: il bénéficie d'une réduction, et vous touchez une commission sur son achat.</span>
+                    </div>
+                </section>
+
                 {/* Engagement de transparence */}
                 <section className="mb-8">
                     <h2 className="text-xl font-semibold mb-2">🔹 Engagement de transparence</h2>

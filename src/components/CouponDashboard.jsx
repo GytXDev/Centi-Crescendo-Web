@@ -8,16 +8,19 @@ import {
     CheckCircle,
     AlertCircle,
     Trophy,
-    Share2
+    Share2,
+    FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { getCouponsByCreator, updateCouponDiscount } from '@/lib/supabaseServices';
+import { getCouponsByCreator, updateCouponDiscount, getSponsorPaymentsForSponsor } from '@/lib/supabaseServices';
+import { generateReceiptPDF } from '@/utils/pdfGenerator';
 
 function CouponDashboard({ userPhone }) {
     const [coupons, setCoupons] = useState([]);
     const [loading, setLoading] = useState(true);
     const [copiedCode, setCopiedCode] = useState(null);
+    const [payments, setPayments] = useState([]);
     const { toast } = useToast();
     const [editingDiscount, setEditingDiscount] = useState({});
     const [updatingId, setUpdatingId] = useState(null);
@@ -37,12 +40,56 @@ function CouponDashboard({ userPhone }) {
                 console.error('Erreur lors du chargement des coupons:', couponsError);
             } else {
                 setCoupons(userCoupons || []);
+                // Charger les paiements après avoir chargé les coupons
+                await loadUserPayments(userCoupons || []);
             }
         } catch (error) {
             console.error('Erreur lors du chargement des données:', error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadUserPayments = async (couponsToCheck = coupons) => {
+        try {
+            // Récupérer les paiements pour chaque coupon
+            const allPayments = [];
+            for (const coupon of couponsToCheck) {
+                const { data: couponPayments } = await getSponsorPaymentsForSponsor(coupon.id);
+                if (couponPayments && Array.isArray(couponPayments)) {
+                    allPayments.push(...couponPayments);
+                }
+            }
+            setPayments(allPayments);
+        } catch (error) {
+            console.error('Erreur lors du chargement des paiements:', error);
+        }
+    };
+
+    const handleDownloadReceipt = (payment) => {
+        // Trouver le coupon associé à ce paiement
+        const coupon = coupons.find(c => c.id === payment.sponsor_id);
+
+        // S'assurer que les montants sont correctement formatés
+        const amount = parseFloat(payment.amount) || 0;
+        const totalTickets = coupon ? parseInt(coupon.total_uses) || 0 : 0;
+
+        const receiptData = {
+            receiptNumber: payment.receipt_number,
+            sponsorName: payment.sponsor_name,
+            sponsorPhone: payment.sponsor_phone,
+            amount: amount,
+            tombolaTitle: payment.tombolas?.title || 'Tombola',
+            paymentDate: new Date(payment.payment_date).toLocaleDateString('fr-FR'),
+            commissionDetails: {
+                baseCommission: amount,
+                bonusCommission: 0,
+                totalTickets: totalTickets
+            }
+        };
+
+        console.log('Données du reçu:', receiptData); // Pour déboguer
+        generateReceiptPDF(receiptData);
     };
 
     const copyToClipboard = async (code) => {
@@ -250,6 +297,9 @@ Utilise mon code ${code} pour -${coupon?.discount_percentage || 10}% de réducti
                 <h3 className="text-xl font-bold text-white">Vos Coupons</h3>
 
                 {coupons.map((coupon, index) => {
+                    const couponPayments = payments.filter(p => p.sponsor_id === coupon.id);
+                    const isPaid = couponPayments.length > 0;
+
                     return (
                         <motion.div
                             key={coupon.id}
@@ -305,6 +355,40 @@ Utilise mon code ${code} pour -${coupon?.discount_percentage || 10}% de réducti
                                             <p className="text-blue-400 font-bold">
                                                 {parseFloat(coupon.total_commission || 0).toLocaleString()} FCFA
                                             </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Statut de paiement */}
+                                    <div className="mt-4 pt-4 border-t border-gray-700">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-gray-400 text-sm">Statut de paiement:</span>
+                                                {isPaid ? (
+                                                    <div className="flex items-center space-x-2">
+                                                        <CheckCircle className="w-4 h-4 text-green-400" />
+                                                        <span className="text-green-400 text-sm font-semibold">Payé</span>
+                                                        <span className="text-gray-500 text-xs">
+                                                            ({new Date(couponPayments[0].payment_date).toLocaleDateString('fr-FR')})
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center space-x-2">
+                                                        <AlertCircle className="w-4 h-4 text-yellow-400" />
+                                                        <span className="text-yellow-400 text-sm font-semibold">En attente</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {isPaid && (
+                                                <Button
+                                                    onClick={() => handleDownloadReceipt(couponPayments[0])}
+                                                    size="sm"
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                                >
+                                                    <FileText className="w-4 h-4 mr-1" />
+                                                    Reçu
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

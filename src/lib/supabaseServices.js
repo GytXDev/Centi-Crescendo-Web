@@ -869,6 +869,7 @@ export async function getCouponStatsForTombola(tombolaId) {
                 id,
                 code,
                 creator_name,
+                creator_phone,
                 total_uses,
                 total_revenue,
                 total_commission,
@@ -1117,4 +1118,256 @@ export async function getAllCoupons({ includeArchived = false } = {}) {
     const { data, error } = await query;
     if (error) throw error;
     return { data, error: null };
+}
+
+/**
+ * Supprime automatiquement tous les coupons non utilisés d'une tombola inactive
+ */
+export async function deleteUnusedCouponsForInactiveTombola(tombolaId) {
+    try {
+        // Vérifier que la tombola est inactive
+        const { data: tombola, error: tombolaError } = await supabase
+            .from('tombolas')
+            .select('status')
+            .eq('id', tombolaId)
+            .single();
+
+        if (tombolaError) throw tombolaError;
+        if (tombola.status === 'active') {
+            return { data: null, error: 'Impossible de supprimer les coupons d\'une tombola active' };
+        }
+
+        // Supprimer tous les coupons non utilisés
+        const { data, error } = await supabase
+            .from('coupons')
+            .delete()
+            .eq('tombola_id', tombolaId)
+            .eq('total_uses', 0);
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la suppression des coupons non utilisés:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Vérifie s'il y a des coupons non utilisés dans une tombola inactive
+ */
+export async function hasUnusedCouponsInInactiveTombola(tombolaId) {
+    try {
+        // Vérifier que la tombola est inactive
+        const { data: tombola, error: tombolaError } = await supabase
+            .from('tombolas')
+            .select('status')
+            .eq('id', tombolaId)
+            .single();
+
+        if (tombolaError) throw tombolaError;
+        if (tombola.status === 'active') {
+            return { data: false, error: null };
+        }
+
+        // Compter les coupons non utilisés
+        const { count, error } = await supabase
+            .from('coupons')
+            .select('*', { count: 'exact', head: true })
+            .eq('tombola_id', tombolaId)
+            .eq('total_uses', 0);
+
+        if (error) throw error;
+        return { data: count > 0, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la vérification des coupons non utilisés:', error);
+        return { data: false, error };
+    }
+}
+
+/**
+ * Supprime une tombola avec vérification du mot de passe et confirmation
+ */
+export async function deleteTombolaWithConfirmation(id, password, confirmationText) {
+    try {
+        // Vérifier le mot de passe admin
+        const { data: adminCheck, error: adminError } = await verifyAdminPassword(password);
+        if (adminError || !adminCheck) {
+            return { data: null, error: 'Mot de passe administrateur incorrect' };
+        }
+
+        // Récupérer le nom de la tombola pour vérification
+        const { data: tombola, error: tombolaError } = await supabase
+            .from('tombolas')
+            .select('title')
+            .eq('id', id)
+            .single();
+
+        if (tombolaError) throw tombolaError;
+
+        // Vérifier le texte de confirmation
+        const expectedText = `oui je souhaite supprimer ${tombola.title}`;
+        if (confirmationText.toLowerCase().trim() !== expectedText.toLowerCase().trim()) {
+            return { data: null, error: `Texte de confirmation incorrect. Veuillez écrire exactement : "${expectedText}"` };
+        }
+
+        // Supprimer la tombola
+        const { error: deleteError } = await supabase
+            .from('tombolas')
+            .delete()
+            .eq('id', id);
+
+        if (deleteError) throw deleteError;
+        return { data: { success: true }, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la suppression de la tombola:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Crée un paiement de commission pour un parrain
+ */
+export async function createSponsorPayment(sponsorId, tombolaId, amount, sponsorName, sponsorPhone) {
+    try {
+        // Vérifier d'abord s'il existe déjà un paiement
+        const { data: existingPayment, error: checkError } = await checkSponsorPaymentStatus(sponsorId, tombolaId);
+        if (checkError && checkError.code !== 'PGRST116') {
+            throw checkError;
+        }
+
+        if (existingPayment) {
+            return {
+                data: existingPayment,
+                error: 'Un paiement existe déjà pour ce parrain et cette tombola'
+            };
+        }
+
+        const { data, error } = await supabase
+            .from('sponsor_payments')
+            .insert([{
+                sponsor_id: parseInt(sponsorId),
+                tombola_id: parseInt(tombolaId),
+                amount: amount,
+                sponsor_name: sponsorName,
+                sponsor_phone: sponsorPhone,
+                payment_status: 'paid',
+                payment_date: new Date().toISOString(),
+                receipt_number: generateReceiptNumber()
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            // Gérer spécifiquement les erreurs de contrainte unique
+            if (error.code === '23505') {
+                return {
+                    data: null,
+                    error: 'Un paiement existe déjà pour ce parrain et cette tombola'
+                };
+            }
+            throw error;
+        }
+
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la création du paiement parrain:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Vérifie si un parrain a déjà été payé pour une tombola
+ */
+export async function checkSponsorPaymentStatus(sponsorId, tombolaId) {
+    try {
+        const { data, error } = await supabase
+            .from('sponsor_payments')
+            .select('*')
+            .eq('sponsor_id', sponsorId)
+            .eq('tombola_id', tombolaId)
+            .eq('payment_status', 'paid')
+            .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+            throw error;
+        }
+
+        return { data: data || null, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la vérification du statut de paiement:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Génère un numéro de reçu unique
+ */
+function generateReceiptNumber() {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return `RCP-${timestamp}-${random}`;
+}
+
+/**
+ * Récupère les paiements de commission pour une tombola
+ */
+export async function getSponsorPaymentsForTombola(tombolaId) {
+    try {
+        const { data, error } = await supabase
+            .from('sponsor_payments')
+            .select('*')
+            .eq('tombola_id', tombolaId)
+            .order('payment_date', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des paiements parrain:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Récupère les paiements de commission pour un parrain
+ */
+export async function getSponsorPaymentsForSponsor(sponsorId) {
+    try {
+        const { data, error } = await supabase
+            .from('sponsor_payments')
+            .select(`
+                *,
+                tombolas (
+                    id,
+                    title
+                )
+            `)
+            .eq('sponsor_id', sponsorId)
+            .eq('payment_status', 'paid')
+            .order('payment_date', { ascending: false });
+
+        if (error) throw error;
+        return { data, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la récupération des paiements parrain:', error);
+        return { data: null, error };
+    }
+}
+
+/**
+ * Génère un reçu PDF pour un paiement de commission
+ */
+export async function generatePaymentReceipt(paymentId) {
+    try {
+        const { data: payment, error } = await supabase
+            .from('sponsor_payments')
+            .select('*')
+            .eq('id', paymentId)
+            .single();
+
+        if (error) throw error;
+        return { data: payment, error: null };
+    } catch (error) {
+        console.error('Erreur lors de la génération du reçu:', error);
+        return { data: null, error };
+    }
 } 

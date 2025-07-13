@@ -14,6 +14,9 @@ import {
   createTombola,
   updateTombola,
   deleteTombola,
+  deleteTombolaWithConfirmation,
+  deleteUnusedCouponsForInactiveTombola,
+  hasUnusedCouponsInInactiveTombola,
   getGlobalStats,
   getAppConfig,
   updateAppConfigById,
@@ -48,7 +51,7 @@ function AdminPage() {
     totalRevenue: 0,
     activeTombolas: 0
   });
-  const [confirmDelete, setConfirmDelete] = useState({ open: false, tombolaId: null });
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, tombolaId: null, tombolaTitle: '' });
   const [confirmDraw, setConfirmDraw] = useState({ open: false, tombola: null });
   const [isWinnerManagerOpen, setIsWinnerManagerOpen] = useState(false);
   const [selectedTombola, setSelectedTombola] = useState(null);
@@ -75,6 +78,7 @@ function AdminPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [foundParticipant, setFoundParticipant] = useState(null);
+  const [tombolasWithUnusedCoupons, setTombolasWithUnusedCoupons] = useState(new Set());
 
   const { toast } = useToast();
 
@@ -139,6 +143,9 @@ function AdminPage() {
       } else {
         setWinnerVideoPath(config?.winner_video_url || '');
       }
+
+      // Vérifier les tombolas avec des coupons non utilisés
+      await checkTombolasWithUnusedCoupons();
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
       toast({
@@ -153,8 +160,21 @@ function AdminPage() {
 
   // Charger tous les coupons pour la gestion admin
   const loadAllCoupons = async () => {
-    const { data } = await getAllCoupons();
-    setAllCoupons(data || []);
+    try {
+      const { data, error } = await getAllCoupons({ includeArchived: false });
+      if (error) {
+        console.error('Erreur lors du chargement des coupons:', error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les coupons.",
+          variant: "destructive"
+        });
+      } else {
+        setAllCoupons(data || []);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des coupons:', error);
+    }
   };
 
   useEffect(() => {
@@ -293,12 +313,22 @@ function AdminPage() {
   };
 
   const handleDeleteTombola = async (id) => {
+    const tombola = tombolas.find(t => t.id === id);
+    if (!tombola) return;
+
+    setConfirmDelete({ open: true, tombolaId: id, tombolaTitle: tombola.title });
+  };
+
+  const confirmDeleteTombola = async (password, confirmationText) => {
+    const tombolaId = confirmDelete.tombolaId;
+    setConfirmDelete({ open: false, tombolaId: null, tombolaTitle: '' });
+
     try {
-      const { error } = await deleteTombola(id);
+      const { data, error } = await deleteTombolaWithConfirmation(tombolaId, password, confirmationText);
       if (error) {
         toast({
           title: "Erreur",
-          description: "Impossible de supprimer la tombola. Veuillez réessayer.",
+          description: error,
           variant: "destructive"
         });
         return;
@@ -307,10 +337,56 @@ function AdminPage() {
       toast({
         title: "Supprimé",
         description: "Tombola supprimée avec succès",
-        variant: "destructive"
+        variant: "success"
       });
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+      toast({
+        title: "Erreur",
+        description: "Une erreur inattendue s'est produite.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const checkTombolasWithUnusedCoupons = async () => {
+    try {
+      const inactiveTombolas = tombolas.filter(t => t.status !== 'active');
+      const tombolasWithUnused = new Set();
+
+      for (const tombola of inactiveTombolas) {
+        const { data: hasUnused, error } = await hasUnusedCouponsInInactiveTombola(tombola.id);
+        if (!error && hasUnused) {
+          tombolasWithUnused.add(tombola.id);
+        }
+      }
+
+      setTombolasWithUnusedCoupons(tombolasWithUnused);
+    } catch (error) {
+      console.error('Erreur lors de la vérification des coupons non utilisés:', error);
+    }
+  };
+
+  const handleCleanupUnusedCoupons = async (tombolaId) => {
+    try {
+      const { data, error } = await deleteUnusedCouponsForInactiveTombola(tombolaId);
+      if (error) {
+        toast({
+          title: "Erreur",
+          description: error,
+          variant: "destructive"
+        });
+        return;
+      }
+      await loadAllCoupons();
+      await checkTombolasWithUnusedCoupons(); // Recharger l'état des boutons
+      toast({
+        title: "Nettoyage effectué",
+        description: "Les coupons non utilisés ont été supprimés avec succès",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error('Erreur lors du nettoyage:', error);
       toast({
         title: "Erreur",
         description: "Une erreur inattendue s'est produite.",
@@ -771,7 +847,7 @@ function AdminPage() {
                           </Button>
 
                           <Button
-                            onClick={() => setConfirmDelete({ open: true, tombolaId: tombola.id })}
+                            onClick={() => handleDeleteTombola(tombola.id)}
                             size="sm"
                             className="bg-red-500 hover:bg-red-600 text-white"
                           >
@@ -817,7 +893,25 @@ function AdminPage() {
             transition={{ delay: 0.5, duration: 0.5 }}
             className="bg-[#1C1C21]/50 border border-gray-800 rounded-2xl p-6 mt-8"
           >
-            <h2 className="text-2xl font-bold text-white mb-6">Gestion des Coupons</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Gestion des Coupons</h2>
+              <div className="flex gap-2">
+                {tombolas
+                  .filter(t => t.status !== 'active' && tombolasWithUnusedCoupons.has(t.id))
+                  .map(tombola => (
+                    <Button
+                      key={tombola.id}
+                      onClick={() => handleCleanupUnusedCoupons(tombola.id)}
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white"
+                      title={`Nettoyer les coupons non utilisés de "${tombola.title}"`}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Nettoyer {tombola.title}
+                    </Button>
+                  ))}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm text-left">
                 <thead>
@@ -930,16 +1024,14 @@ function AdminPage() {
 
         <ConfirmModal
           isOpen={confirmDelete.open}
-          onClose={() => setConfirmDelete({ open: false, tombolaId: null })}
-          onConfirm={async () => {
-            await handleDeleteTombola(confirmDelete.tombolaId);
-            setConfirmDelete({ open: false, tombolaId: null });
-          }}
-          title="Confirmer la suppression"
-          message="Êtes-vous sûr de vouloir supprimer cette tombola ? Cette action est irréversible."
-          confirmLabel="Supprimer"
-          confirmColor="bg-red-500 hover:bg-red-600"
-          icon={<Trash2 />}
+          onClose={() => setConfirmDelete({ open: false, tombolaId: null, tombolaTitle: '' })}
+          onConfirm={confirmDeleteTombola}
+          title="Suppression sécurisée de tombola"
+          message={`Vous êtes sur le point de supprimer la tombola "${confirmDelete.tombolaTitle}". Cette action nécessite une confirmation spéciale.`}
+          confirmText="Supprimer définitivement"
+          variant="destructive"
+          secureDelete={true}
+          tombolaTitle={confirmDelete.tombolaTitle}
         />
 
         <ConfirmModal
@@ -948,9 +1040,8 @@ function AdminPage() {
           onConfirm={confirmDrawWinners}
           title="Confirmer le tirage"
           message={confirmDraw.tombola ? `Êtes-vous sûr de vouloir effectuer le tirage pour "${confirmDraw.tombola.title}" ?\n\nCette action est irréversible et sélectionnera ${confirmDraw.tombola.max_winners} gagnant(s) parmi ${confirmDraw.tombola.participants} participant(s).` : ''}
-          confirmLabel="Tirer au sort"
-          confirmColor="bg-green-500 hover:bg-green-600"
-          icon={<Gift />}
+          confirmText="Tirer au sort"
+          variant="default"
         />
 
         <WinnerManagerModal

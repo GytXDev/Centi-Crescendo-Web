@@ -3,12 +3,15 @@ import { motion } from 'framer-motion';
 import { DollarSign, TrendingUp, Users, Trophy, Phone, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { getCommissionSummaryForTombola } from '@/lib/supabaseServices';
+import { getCommissionSummaryForTombola, checkSponsorPaymentStatus } from '@/lib/supabaseServices';
+import CommissionPaymentButton from './CommissionPaymentButton';
+import jsPDF from 'jspdf';
 
 function CommissionSummary({ tombolaId, tombolaTitle }) {
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
+    const [paymentStatuses, setPaymentStatuses] = useState({});
     const { toast } = useToast();
 
     useEffect(() => {
@@ -32,6 +35,16 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
             }
 
             setSummary(data);
+
+            // Vérifier le statut de paiement de chaque parrain
+            if (data && data.topSponsors) {
+                const statuses = {};
+                for (const sponsor of data.topSponsors) {
+                    const { data: paymentData } = await checkSponsorPaymentStatus(sponsor.id, tombolaId);
+                    statuses[sponsor.id] = paymentData;
+                }
+                setPaymentStatuses(statuses);
+            }
         } catch (error) {
             console.error('Erreur lors du chargement:', error);
             toast({
@@ -42,6 +55,11 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handlePaymentComplete = (payment) => {
+        // Recharger les données après un paiement
+        loadCommissionSummary();
     };
 
     if (loading) {
@@ -80,6 +98,18 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
                     Récapitulatif des Commissions - {tombolaTitle}
                 </h3>
             </div>
+
+            {/* Bouton Export PDF Top Parrains */}
+            {summary.topSponsors && summary.topSponsors.length > 0 && (
+                <div className="mb-4 flex justify-end">
+                    <Button
+                        className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold"
+                        onClick={() => exportTopSponsorsPDF(summary.topSponsors, tombolaTitle)}
+                    >
+                        Télécharger PDF Top Parrains
+                    </Button>
+                </div>
+            )}
 
             {/* Statistiques globales */}
             <div className="grid md:grid-cols-3 gap-6 mb-8">
@@ -189,6 +219,17 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
                                         <p className="text-gray-400 text-sm">
                                             {parseFloat(sponsor.total_revenue || 0).toLocaleString()} FCFA de CA
                                         </p>
+                                        {/* Bouton de paiement */}
+                                        <div className="mt-2">
+                                            <CommissionPaymentButton
+                                                sponsor={sponsor}
+                                                tombolaId={tombolaId}
+                                                tombolaTitle={tombolaTitle}
+                                                onPaymentComplete={handlePaymentComplete}
+                                                isPaid={!!paymentStatuses[sponsor.id]}
+                                                paymentData={paymentStatuses[sponsor.id]}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -198,6 +239,36 @@ function CommissionSummary({ tombolaId, tombolaTitle }) {
             </div>
         </motion.div>
     );
+}
+
+function exportTopSponsorsPDF(topSponsors, tombolaTitle) {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(`Top Parrains - ${tombolaTitle || ''}`, 105, 15, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text('Classement des parrains par nombre de tickets vendus', 105, 25, { align: 'center' });
+
+    // En-têtes de colonnes
+    const headers = ['Rang', 'Nom', 'Coupon', 'Téléphone', 'Tickets vendus'];
+    let startY = 40;
+    let colX = [20, 45, 100, 140, 170];
+    headers.forEach((header, i) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(header, colX[i], startY);
+    });
+    doc.setFont('helvetica', 'normal');
+
+    // Lignes de parrains
+    topSponsors.forEach((sponsor, idx) => {
+        const y = startY + 10 + idx * 10;
+        doc.text(String(idx + 1), colX[0], y);
+        doc.text(sponsor.creator_name || '-', colX[1], y);
+        doc.text(sponsor.code || '-', colX[2], y);
+        doc.text(sponsor.creator_phone || '-', colX[3], y);
+        doc.text(String(sponsor.total_uses || 0), colX[4], y);
+    });
+
+    doc.save('top-parrains.pdf');
 }
 
 export default CommissionSummary; 

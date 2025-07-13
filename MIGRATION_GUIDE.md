@@ -1,114 +1,135 @@
-# Guide de Migration - Calcul Dynamique des Participants
+# Guide de Migration - Nouvelles Fonctionnalités Administratives
 
 ## Vue d'ensemble
 
-Ce guide décrit les modifications apportées au système pour remplacer le champ `participants` stocké dans la table `tombolas` par un calcul dynamique basé sur les participants confirmés.
+Ce guide décrit les nouvelles fonctionnalités ajoutées à l'interface d'administration pour améliorer la gestion des tombolas, des coupons et des commissions.
 
-## Changements apportés
+## Nouvelles Fonctionnalités
 
-### 1. Base de données
+### 1. Suppression Automatique des Coupons Non Utilisés
 
-#### Suppression du champ `participants`
-- Le champ `participants INTEGER NOT NULL DEFAULT 0` a été supprimé de la table `tombolas`
-- Les triggers et fonctions associés ont été supprimés
+**Fonctionnalité :** Lorsqu'une tombola n'est plus active, tous les coupons n'ayant eu aucune utilisation sont automatiquement supprimés.
 
-#### Calcul dynamique
-- Le nombre de participants est maintenant calculé via des requêtes SQL
-- Seuls les participants avec `payment_status = 'confirmed'` sont comptés
-- Les calculs sont effectués en temps réel
+**Implémentation :**
+- Nouveau bouton "Nettoyer [Nom de la tombola]" dans la section "Gestion des Coupons"
+- Fonction `deleteUnusedCouponsForInactiveTombola()` dans les services Supabase
+- Vérification que la tombola est inactive avant suppression
 
-### 2. Services (supabaseServices.js)
+**Utilisation :**
+1. Aller dans la section "Gestion des Coupons"
+2. Cliquer sur le bouton "Nettoyer [Nom de la tombola]" pour les tombolas inactives
+3. Confirmation automatique de la suppression
 
-#### Fonctions modifiées
-- `getAllTombolas()` - Calcule maintenant le nombre de participants pour chaque tombola
-- `getCurrentTombola()` - Calcule dynamiquement le nombre de participants
-- `getGlobalStats()` - Calcule les revenus basés sur les participants confirmés
+### 2. Suppression Sécurisée des Tombolas
 
-#### Nouvelles fonctions
-- `getTombolaParticipantsCount(tombolaId)` - Calcule le nombre de participants d'une tombola
-- `updateTombolaParticipants(tombolaId)` - Fonction legacy dépréciée
+**Fonctionnalité :** Pour supprimer une tombola, l'administrateur doit :
+- Renseigner le mot de passe administrateur
+- Écrire exactement "oui je souhaite supprimer [nom de la tombola]"
 
-### 3. Composants
+**Implémentation :**
+- Modal de confirmation sécurisée avec champs mot de passe et texte de confirmation
+- Fonction `deleteTombolaWithConfirmation()` dans les services Supabase
+- Vérification du mot de passe et du texte de confirmation
 
-#### ParticipationModal.jsx
-- Suppression de l'appel à `updateTombolaParticipants()`
-- Le nombre de participants est maintenant mis à jour automatiquement
+**Utilisation :**
+1. Cliquer sur le bouton de suppression d'une tombola
+2. Entrer le mot de passe administrateur
+3. Écrire exactement le texte de confirmation demandé
+4. Confirmer la suppression
 
-#### Autres composants
-- Tous les composants utilisent maintenant le champ `participants` calculé dynamiquement
-- Aucun changement visible pour l'utilisateur final
+### 3. Paiement des Commissions avec Reçu
 
-## Migration de la base de données
+**Fonctionnalité :** Pour les tombolas terminées, chaque parrain a un bouton "Payer" qui :
+- Enregistre le paiement de commission
+- Génère automatiquement un reçu PDF
+- Marque le paiement comme effectué
 
-### Étape 1: Exécuter le script de migration
+**Implémentation :**
+- Nouvelle table `sponsor_payments` dans la base de données
+- Composant `CommissionPaymentButton` pour gérer les paiements
+- Fonction `generateReceiptPDF()` pour créer les reçus
+- Boutons de paiement dans le récapitulatif des commissions
 
-```sql
--- Exécuter le fichier database_migration_remove_participants_field.sql
-```
+**Utilisation :**
+1. Aller dans la section "Récapitulatif des Commissions"
+2. Pour chaque parrain, cliquer sur le bouton "Payer [montant] FCFA"
+3. Le reçu PDF se télécharge automatiquement
+4. Le bouton devient "Payé" après traitement
 
-### Étape 2: Vérifier la migration
+## Modifications de la Base de Données
 
-```sql
--- Vérifier que le champ participants a été supprimé
-SELECT column_name, data_type 
-FROM information_schema.columns 
-WHERE table_name = 'tombolas' 
-ORDER BY ordinal_position;
-```
-
-## Avantages du nouveau système
-
-### 1. Cohérence des données
-- Le nombre de participants est toujours à jour
-- Pas de risque de désynchronisation entre les tables
-
-### 2. Performance
-- Élimination des triggers qui ralentissaient les insertions
-- Calculs optimisés avec des requêtes SQL efficaces
-
-### 3. Maintenance
-- Moins de code à maintenir
-- Pas de risque d'oubli de mise à jour du champ
-
-## Impact sur les performances
-
-### Avantages
-- Suppression des triggers qui ralentissaient les insertions de participants
-- Requêtes optimisées avec des index appropriés
-
-### Considérations
-- Les requêtes de liste de tombolas sont légèrement plus lentes
-- Impact négligeable grâce aux index sur `participants.tombola_id` et `participants.payment_status`
-
-## Tests recommandés
-
-### 1. Test de création de participant
-- Vérifier que le nombre de participants s'affiche correctement après création
-- Tester avec différents statuts de paiement
-
-### 2. Test de liste des tombolas
-- Vérifier que le nombre de participants s'affiche correctement
-- Tester avec des tombolas vides et pleines
-
-### 3. Test des statistiques
-- Vérifier que les statistiques globales sont correctes
-- Tester le calcul des revenus
-
-## Rollback (si nécessaire)
-
-Si un rollback est nécessaire, exécuter :
+### Nouvelle Table : sponsor_payments
 
 ```sql
--- Recréer le champ participants
-ALTER TABLE tombolas ADD COLUMN participants INTEGER NOT NULL DEFAULT 0;
-
--- Recréer la fonction et le trigger
--- (voir le fichier database_schema.sql original)
+CREATE TABLE sponsor_payments (
+    id UUID PRIMARY KEY,
+    sponsor_id UUID NOT NULL,
+    tombola_id UUID NOT NULL REFERENCES tombolas(id),
+    amount DECIMAL(10,2) NOT NULL,
+    sponsor_name VARCHAR(255) NOT NULL,
+    sponsor_phone VARCHAR(20) NOT NULL,
+    payment_status VARCHAR(20) DEFAULT 'pending',
+    payment_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    receipt_number VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
+
+### Nouvelles Fonctions Supabase
+
+1. `deleteUnusedCouponsForInactiveTombola(tombolaId)`
+2. `deleteTombolaWithConfirmation(id, password, confirmationText)`
+3. `createSponsorPayment(sponsorId, tombolaId, amount, sponsorName, sponsorPhone)`
+4. `getSponsorPaymentsForTombola(tombolaId)`
+5. `generatePaymentReceipt(paymentId)`
+
+## Nouveaux Composants
+
+1. **CommissionPaymentButton** : Gère les boutons de paiement des commissions
+2. **ConfirmModal** (modifié) : Supporte la suppression sécurisée avec mot de passe
+
+## Nouveaux Utilitaires
+
+1. **generateReceiptPDF()** : Génère des reçus de paiement en PDF
+
+## Migration Requise
+
+### Étape 1 : Exécuter le script SQL
+
+```bash
+# Exécuter le script de migration
+psql -d votre_base_de_donnees -f database_migration_add_sponsor_payments.sql
+```
+
+### Étape 2 : Vérifier les nouvelles fonctionnalités
+
+1. **Test de suppression sécurisée :**
+   - Essayer de supprimer une tombola
+   - Vérifier que le mot de passe et le texte de confirmation sont requis
+
+2. **Test de nettoyage des coupons :**
+   - Créer une tombola inactive avec des coupons non utilisés
+   - Utiliser le bouton de nettoyage
+   - Vérifier que seuls les coupons non utilisés sont supprimés
+
+3. **Test de paiement des commissions :**
+   - Créer une tombola avec des parrains
+   - Effectuer le tirage
+   - Tester les boutons de paiement
+   - Vérifier la génération des reçus PDF
+
+## Sécurité
+
+- **Suppression sécurisée :** Double vérification (mot de passe + texte de confirmation)
+- **Paiements tracés :** Chaque paiement est enregistré avec un numéro de reçu unique
+- **Audit trail :** Tous les paiements sont horodatés et tracés
 
 ## Support
 
-Pour toute question ou problème lié à cette migration, consultez :
-- Le fichier `supabaseServices.js` pour les détails d'implémentation
-- Les logs de la console pour les erreurs éventuelles
-- Le guide de démarrage pour l'utilisation des nouvelles fonctions 
+En cas de problème avec les nouvelles fonctionnalités :
+
+1. Vérifier que la migration SQL a été exécutée correctement
+2. Contrôler les logs de la console pour les erreurs JavaScript
+3. Vérifier les permissions Supabase pour la nouvelle table
+4. Tester les fonctionnalités une par une pour isoler les problèmes 

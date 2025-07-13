@@ -107,7 +107,8 @@ function ParticipantsPage() {
             finalPrice: couponUse.final_price || p.tombolas?.ticket_price || 0,
             discountAmount: couponUse.discount_amount || 0,
             drawDate: p.tombolas?.draw_date || '-',
-            couponCode: coupon.code || null
+            couponCode: coupon.code || null,
+            generatedAt: p.created_at || null
         };
         generateTicketPDF(ticketData);
     };

@@ -187,7 +187,7 @@ function HistoryPage() {
                           prize: winner.prize_amount,
                           ticketNumber: winner.participants?.ticket_number || 'N/A',
                           date: new Date(winner.created_at).toLocaleDateString('fr-FR'),
-                          photo: "Personne souriante tenant des billets de banque",
+                          photo_url: winner.photo_url,
                           tombola: winner.tombolas?.title || 'Tombola'
                         }}
                         showTombola={true}

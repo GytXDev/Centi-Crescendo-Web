@@ -74,7 +74,7 @@ function HistoryPage() {
           >
             <div className="text-center mb-12">
               <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                📚 Historique des Tombolas
+                Historique des Tombolas
               </h1>
               <p className="text-white/80 text-lg">
                 Revivez les moments magiques de nos précédentes tombolas
@@ -144,7 +144,7 @@ function HistoryPage() {
 
                       <div className="mt-4 pt-4 border-t border-gray-700">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${tombola.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                            'bg-red-500/20 text-red-400'
+                          'bg-red-500/20 text-red-400'
                           }`}>
                           {tombola.status === 'completed' ? 'Terminée' : 'Annulée'}
                         </span>
